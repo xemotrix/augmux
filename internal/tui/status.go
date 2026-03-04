@@ -498,7 +498,7 @@ func renderActionBar(a *core.AgentState) string {
 		{"finish", true},                    // always available
 	}
 
-	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(colorPurple)
+	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 	enabledStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
 	disabledStyle := lipgloss.NewStyle().Foreground(colorDimGray)
 	sepStyle := lipgloss.NewStyle().Foreground(colorDimGray)

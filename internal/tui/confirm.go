@@ -12,7 +12,7 @@ var (
 	confirmActiveStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(colorWhite).
-				Background(colorPurple).
+				Background(colorAccent).
 				Padding(0, 2)
 
 	confirmInactiveStyle = lipgloss.NewStyle().

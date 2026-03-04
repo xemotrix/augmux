@@ -3,20 +3,20 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	// Colors
-	colorPurple  = lipgloss.Color("141")
-	colorGreen   = lipgloss.Color("78")
-	colorYellow  = lipgloss.Color("220")
-	colorRed     = lipgloss.Color("203")
-	colorCyan    = lipgloss.Color("80")
-	colorGray    = lipgloss.Color("245")
-	colorDimGray = lipgloss.Color("240")
-	colorWhite   = lipgloss.Color("255")
+	// Kanagawa color palette
+	colorAccent  = lipgloss.Color("#FF9E3B") // roninYellow — accent/brand
+	colorGreen   = lipgloss.Color("#98BB6C") // springGreen
+	colorYellow  = lipgloss.Color("#DCA561") // autumnYellow
+	colorRed     = lipgloss.Color("#E46876") // waveRed
+	colorCyan    = lipgloss.Color("#7FB4CA") // springBlue
+	colorGray    = lipgloss.Color("#727169") // fujiGray
+	colorDimGray = lipgloss.Color("#54546D") // sumiInk4
+	colorWhite   = lipgloss.Color("#DCD7BA") // fujiWhite
 
 	// Title
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(colorPurple).
+			Foreground(colorAccent).
 			MarginBottom(1)
 
 	// Status badges
@@ -31,7 +31,7 @@ var (
 	dirtyStyle = lipgloss.NewStyle().Foreground(colorRed)
 
 	// Picker
-	pickerCursorStyle   = lipgloss.NewStyle().Foreground(colorPurple).Bold(true)
+	pickerCursorStyle   = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	pickerSelectedStyle = lipgloss.NewStyle().Foreground(colorWhite).Bold(true)
 	pickerNormalStyle   = lipgloss.NewStyle().Foreground(colorGray)
 	pickerHintStyle     = lipgloss.NewStyle().Foreground(colorDimGray).Italic(true)
