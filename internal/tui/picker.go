@@ -9,9 +9,8 @@ import (
 )
 
 type pickerItem struct {
-	agent    *core.AgentState
-	cols     [5]string // name, status, commits, dirty, branch
-	nameLen  int
+	agent *core.AgentState
+	cols  [5]string // name, status, commits, dirty, branch
 }
 
 type pickerModel struct {
@@ -236,6 +235,4 @@ func AgentStatusStyled(a *core.AgentState, text string) string {
 	return badgeWip.Render(text)
 }
 
-func AgentStatusLabel(a *core.AgentState) string {
-	return AgentStatusStyled(a, AgentStatusRaw(a))
-}
+

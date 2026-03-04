@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +9,7 @@ import (
 )
 
 // Fatal prints an error message and exits.
-func Fatal(format string, args ...interface{}) {
+func Fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "ERROR: "+format+"\n", args...)
 	os.Exit(1)
 }
@@ -29,16 +28,6 @@ func RunCmd(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
-}
-
-// RunCmdPassthrough runs a command with terminal I/O attached.
-func RunCmdPassthrough(dir, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 // Git runs a git command in the given directory and returns output.
@@ -64,16 +53,6 @@ func TmuxQuery(args ...string) (string, error) {
 	return RunCmd("tmux", args...)
 }
 
-// PromptUser shows a prompt and reads a line from stdin.
-func PromptUser(msg string) string {
-	fmt.Print(msg)
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		return strings.TrimSpace(scanner.Text())
-	}
-	return ""
-}
-
 // ReadFileContent reads a file and returns its trimmed contents, or empty string on error.
 func ReadFileContent(path string) string {
 	data, err := os.ReadFile(path)
@@ -94,8 +73,4 @@ func IsDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// FileExists checks if a file exists.
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
+

@@ -23,21 +23,12 @@ var (
 	badgeWip       = lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
 	badgeMerged    = lipgloss.NewStyle().Bold(true).Foreground(colorCyan)
 	badgeResolving = lipgloss.NewStyle().Bold(true).Foreground(colorYellow)
-	badgeNoWindow  = lipgloss.NewStyle().Bold(true).Foreground(colorRed)
-
 	// Labels and values
 	labelStyle = lipgloss.NewStyle().Foreground(colorDimGray)
 	valueStyle = lipgloss.NewStyle().Foreground(colorWhite)
 	branchStyle = lipgloss.NewStyle().Foreground(colorCyan)
 	aheadStyle = lipgloss.NewStyle().Foreground(colorYellow)
 	dirtyStyle = lipgloss.NewStyle().Foreground(colorRed)
-
-	// Agent card
-	agentCardStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorDimGray).
-			Padding(0, 1).
-			MarginBottom(0)
 
 	// Picker
 	pickerCursorStyle   = lipgloss.NewStyle().Foreground(colorPurple).Bold(true)

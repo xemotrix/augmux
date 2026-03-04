@@ -59,7 +59,7 @@ func MergeOne(w io.Writer, repoRoot string, idx int, interactive bool) error {
 			if interactive {
 				fmt.Fprintln(w)
 				fmt.Fprintln(w, "  ⚠ Uncommitted changes in worktree:")
-				for _, line := range strings.Split(core.GitMust(ag.Worktree, "status", "--short"), "\n") {
+				for line := range strings.SplitSeq(core.GitMust(ag.Worktree, "status", "--short"), "\n") {
 					fmt.Fprintf(w, "    %s\n", line)
 				}
 				fmt.Fprintln(w)
@@ -99,7 +99,7 @@ func MergeOne(w io.Writer, repoRoot string, idx int, interactive bool) error {
 	fmt.Fprintf(w, "  %s commit(s) to merge.\n", ahead)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "  Changes summary:")
-	for _, line := range strings.Split(core.GitMust(repoRoot, "diff", "--stat", srcBranch+".."+ag.Branch), "\n") {
+	for line := range strings.SplitSeq(core.GitMust(repoRoot, "diff", "--stat", srcBranch+".."+ag.Branch), "\n") {
 		fmt.Fprintf(w, "    %s\n", line)
 	}
 	fmt.Fprintln(w)

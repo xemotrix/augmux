@@ -122,10 +122,7 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 
 	// cardWidth - "╭─"(2) - idLabel - fill - " status "(1+statusRaw+1) - "─╮"(2)
 	used := 2 + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + 2
-	fill := cardWidth - used
-	if fill < 1 {
-		fill = 1
-	}
+	fill := max(cardWidth-used, 1)
 	topLine := bdr.Render(cTL+cH) + idStyled +
 		bdr.Render(strings.Repeat(cH, fill)) +
 		" " + statusStyled + " " +
@@ -134,15 +131,9 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 	// Description line with activity indicator on the right
 	activityStr := activityIndicator(a, spinnerFrame)
 	activityRaw := activityRawStr(a)
-	maxName := textWidth - lipgloss.Width(activityRaw) - 1
-	if maxName < 10 {
-		maxName = 10
-	}
+	maxName := max(textWidth-lipgloss.Width(activityRaw)-1, 10)
 	name := truncate(a.Description, maxName)
-	namePad := textWidth - lipgloss.Width(name) - lipgloss.Width(activityRaw)
-	if namePad < 1 {
-		namePad = 1
-	}
+	namePad := max(textWidth-lipgloss.Width(name)-lipgloss.Width(activityRaw), 1)
 	nameLine := bdr.Render(cV) + " " + valueStyle.Render(name) +
 		strings.Repeat(" ", namePad) + activityStr + " " + bdr.Render(cV)
 
@@ -157,10 +148,7 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 	iconWidth := 2 // branchIcon + space
 	maxBranch := textWidth - lipgloss.Width(rightInfo) - 1 - iconWidth
 	branch := truncate(a.Branch, maxBranch)
-	branchGap := textWidth - lipgloss.Width(branch) - iconWidth - lipgloss.Width(rightInfo)
-	if branchGap < 1 {
-		branchGap = 1
-	}
+	branchGap := max(textWidth-lipgloss.Width(branch)-iconWidth-lipgloss.Width(rightInfo), 1)
 	branchLine := bdr.Render(cV) + " " + RenderBranch(branch) +
 		strings.Repeat(" ", branchGap) +
 		aheadStyle.Render(aheadStr) + "  " + dirtyStyle.Render(dirtyStr) +
@@ -197,20 +185,14 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 		cards = append(cards, renderAgentCard(a, repoRoot, srcBranch, "⠋"))
 	}
 
-	cols := termWidth / (cardWidth + 1)
-	if cols < 1 {
-		cols = 1
-	}
+	cols := max(termWidth/(cardWidth+1), 1)
 	if cols > len(cards) {
 		cols = len(cards)
 	}
 
 	var rows []string
 	for i := 0; i < len(cards); i += cols {
-		end := i + cols
-		if end > len(cards) {
-			end = len(cards)
-		}
+		end := min(i+cols, len(cards))
 		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
 		rows = append(rows, row)
 	}
@@ -268,10 +250,7 @@ func (m *interactiveTUIModel) refreshAgents() {
 }
 
 func (m interactiveTUIModel) cols() int {
-	cols := m.width / (cardWidth + 1)
-	if cols < 1 {
-		cols = 1
-	}
+	cols := max(m.width/(cardWidth+1), 1)
 	if len(m.agents) > 0 && cols > len(m.agents) {
 		cols = len(m.agents)
 	}
@@ -576,10 +555,7 @@ func (m interactiveTUIModel) View() string {
 
 		var rows []string
 		for i := 0; i < len(cards); i += cols {
-			end := i + cols
-			if end > len(cards) {
-				end = len(cards)
-			}
+			end := min(i+cols, len(cards))
 			row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
 			rows = append(rows, row)
 		}

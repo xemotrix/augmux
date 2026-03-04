@@ -26,7 +26,7 @@ func handleConflict(w io.Writer, repoRoot, task, mergeMsg string, agentIdx int) 
 
 	fmt.Fprintln(w, "  Conflicting files:")
 	files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-	for _, f := range strings.Split(files, "\n") {
+	for f := range strings.SplitSeq(files, "\n") {
 		if f != "" {
 			fmt.Fprintf(w, "    %s\n", f)
 		}
