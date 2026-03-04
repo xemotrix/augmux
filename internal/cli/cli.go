@@ -170,41 +170,55 @@ func cmdCancel(args []string) {
 	}
 }
 
-func tuiActionHandler(repoRoot string) func(tui.TUIResult) {
-	return func(result tui.TUIResult) {
+func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
+	return func(result tui.TUIResult, spawnName string) []string {
 		switch result.Action {
 		case tui.ActionSpawn:
-			ops.Spawn(repoRoot, nil)
+			// spawnName is provided by the embedded text input
+			return tui.CaptureOutput(func() {
+				ops.SpawnByName(repoRoot, spawnName)
+			})
 		case tui.ActionMerge:
+			// Merge may need sub-TUIs (conflict resolution) — runs in suspended mode
 			if result.AgentIdx >= 0 {
 				if err := ops.MergeOne(repoRoot, result.AgentIdx); err != nil {
 					fmt.Printf("  ⚠ %v\n", err)
 				}
 			}
+			return nil
 		case tui.ActionAccept:
 			if result.AgentIdx >= 0 {
-				if err := ops.AcceptOne(repoRoot, result.AgentIdx); err != nil {
-					fmt.Printf("  ⚠ %v\n", err)
-				}
+				return tui.CaptureOutput(func() {
+					if err := ops.AcceptOne(repoRoot, result.AgentIdx); err != nil {
+						fmt.Printf("  ⚠ %v\n", err)
+					}
+				})
 			}
 		case tui.ActionReject:
 			if result.AgentIdx >= 0 {
-				if err := ops.RejectOne(repoRoot, result.AgentIdx); err != nil {
-					fmt.Printf("  ⚠ %v\n", err)
-				}
+				return tui.CaptureOutput(func() {
+					if err := ops.RejectOne(repoRoot, result.AgentIdx); err != nil {
+						fmt.Printf("  ⚠ %v\n", err)
+					}
+				})
 			}
 		case tui.ActionCancel:
 			if result.AgentIdx >= 0 {
-				ops.CancelOne(repoRoot, result.AgentIdx)
+				return tui.CaptureOutput(func() {
+					ops.CancelOne(repoRoot, result.AgentIdx)
+				})
 			}
 		case tui.ActionFinish:
+			// Finish calls MergeAll which may need sub-TUIs — runs in suspended mode
 			ops.FinishAll(repoRoot)
+			return nil
 		case tui.ActionFocus:
 			if result.AgentIdx >= 0 {
 				winName := fmt.Sprintf("augmux-%d", result.AgentIdx)
 				core.TmuxRun("select-window", "-t", winName)
 			}
 		}
+		return nil
 	}
 }
 

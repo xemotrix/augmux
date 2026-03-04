@@ -86,3 +86,16 @@ func Spawn(repoRoot string, args []string) {
 	fmt.Println()
 	fmt.Println("Check status: augmux status")
 }
+
+
+// SpawnByName spawns a single agent with the given name (no interactive prompt).
+func SpawnByName(repoRoot string, name string) {
+	repoRoot = core.MustAbs(repoRoot)
+	if err := ensureSession(repoRoot); err != nil {
+		core.Fatal(err.Error())
+	}
+	ag := agent.ActiveAgent()
+	spawnOne(repoRoot, name, ag)
+	fmt.Println()
+	fmt.Println("Check status: augmux status")
+}

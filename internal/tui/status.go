@@ -1,11 +1,15 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
@@ -208,14 +212,25 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 
 // Interactive TUI mode
 
+type tuiMode int
+
+const (
+	modeNormal   tuiMode = iota
+	modeSpawning         // text input for spawn task name
+)
+
 type interactiveTUIModel struct {
-	repoRoot string
-	width    int
-	cursor   int // index into the agents slice
-	agents   []*core.AgentState
-	quitting bool
-	action   TUIAction // pending action to execute after TUI exits
-	spinner  spinner.Model
+	repoRoot      string
+	width         int
+	height        int
+	cursor        int // index into the agents slice
+	agents        []*core.AgentState
+	quitting      bool
+	mode          tuiMode
+	spinner       spinner.Model
+	textInput     textinput.Model                  // for spawn
+	statusLines   []string                         // output from last action
+	actionHandler func(TUIResult, string) []string // returns captured output lines; string is spawn name
 }
 
 type tickMsg time.Time
@@ -253,6 +268,17 @@ func (m interactiveTUIModel) cols() int {
 	return cols
 }
 
+// actionDoneMsg is sent when an inline action completes.
+type actionDoneMsg struct {
+	lines []string
+}
+
+// suspendActionMsg triggers a suspend-based action (merge/finish need sub-TUIs).
+type suspendActionMsg struct {
+	action   TUIAction
+	agentIdx int
+}
+
 func (m interactiveTUIModel) Init() tea.Cmd {
 	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick)
 }
@@ -261,82 +287,188 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		m.refreshAgents()
+
 	case tickMsg:
 		m.refreshAgents()
 		return m, tickEvery(500 * time.Millisecond)
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
+	case actionDoneMsg:
+		m.statusLines = msg.lines
+		m.refreshAgents()
+		return m, nil
+
+	case tea.ResumeMsg:
+		// Returned from a suspended action (merge/finish)
+		m.refreshAgents()
+		return m, nil
+
 	case tea.KeyMsg:
-		n := len(m.agents)
-		cols := m.cols()
-
-		// Resolve selected agent for action guards
-		var sel *core.AgentState
-		if m.cursor >= 0 && m.cursor < n {
-			sel = m.agents[m.cursor]
+		// Handle spawning mode (text input)
+		if m.mode == modeSpawning {
+			return m.updateSpawning(msg)
 		}
-		isWip := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
-		isMerged := sel != nil && sel.MergeCommit != ""
-		isResolving := sel != nil && sel.Resolving != ""
 
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		// Normal mode — clear status on any key if showing status
+		if len(m.statusLines) > 0 {
+			m.statusLines = nil
+		}
+
+		return m.updateNormal(msg)
+	}
+
+	// Forward to text input if in spawning mode
+	if m.mode == modeSpawning {
+		var cmd tea.Cmd
+		m.textInput, cmd = m.textInput.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m interactiveTUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		name := strings.TrimSpace(m.textInput.Value())
+		m.mode = modeNormal
+		if name == "" {
+			m.statusLines = []string{"Empty name — spawn aborted."}
+			return m, nil
+		}
+		// Run spawn with captured output
+		agentIdx := -1
+		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
+		handler := m.actionHandler
+		return m, func() tea.Msg {
+			lines := handler(result, name)
+			return actionDoneMsg{lines: lines}
+		}
+	case "esc", "ctrl+c":
+		m.mode = modeNormal
+		m.statusLines = []string{"Spawn cancelled."}
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(m.agents)
+	cols := m.cols()
+
+	// Resolve selected agent for action guards
+	var sel *core.AgentState
+	if m.cursor >= 0 && m.cursor < n {
+		sel = m.agents[m.cursor]
+	}
+	isWip := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
+	isMerged := sel != nil && sel.MergeCommit != ""
+	isResolving := sel != nil && sel.Resolving != ""
+
+	agentIdx := -1
+	if sel != nil {
+		agentIdx = sel.Index
+	}
+
+	switch msg.String() {
+	case "q", "esc", "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "h", "left":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "l", "right":
+		if m.cursor < n-1 {
+			m.cursor++
+		}
+	case "k", "up":
+		if m.cursor-cols >= 0 {
+			m.cursor -= cols
+		}
+	case "j", "down":
+		if m.cursor+cols < n {
+			m.cursor += cols
+		}
+	// Action keys
+	case "s":
+		ti := textinput.New()
+		ti.Placeholder = "e.g. fix auth bug"
+		ti.Focus()
+		ti.CharLimit = 80
+		ti.Width = 50
+		ti.PromptStyle = pickerCursorStyle
+		ti.TextStyle = pickerSelectedStyle
+		m.textInput = ti
+		m.mode = modeSpawning
+		m.statusLines = nil
+		return m, textinput.Blink
+	case "m":
+		if isWip {
+			return m.runSuspendAction(ActionMerge, agentIdx)
+		}
+	case "a":
+		if isMerged {
+			return m.runInlineAction(ActionAccept, agentIdx)
+		}
+	case "r":
+		if isMerged || isResolving {
+			return m.runInlineAction(ActionReject, agentIdx)
+		}
+	case "c":
+		if isWip || isResolving {
+			return m.runInlineAction(ActionCancel, agentIdx)
+		}
+	case "f":
+		return m.runSuspendAction(ActionFinish, agentIdx)
+	case "enter":
+		if sel != nil {
+			// Focus switches tmux window — quit the TUI
+			result := TUIResult{Action: ActionFocus, AgentIdx: agentIdx}
+			handler := m.actionHandler
 			m.quitting = true
-			return m, tea.Quit
-		case "h", "left":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "l", "right":
-			if m.cursor < n-1 {
-				m.cursor++
-			}
-		case "k", "up":
-			if m.cursor-cols >= 0 {
-				m.cursor -= cols
-			}
-		case "j", "down":
-			if m.cursor+cols < n {
-				m.cursor += cols
-			}
-		// Action keys
-		case "s":
-			m.action = ActionSpawn
-			return m, tea.Quit
-		case "m":
-			if isWip {
-				m.action = ActionMerge
-				return m, tea.Quit
-			}
-		case "a":
-			if isMerged {
-				m.action = ActionAccept
-				return m, tea.Quit
-			}
-		case "r":
-			if isMerged || isResolving {
-				m.action = ActionReject
-				return m, tea.Quit
-			}
-		case "c":
-			if isWip || isResolving {
-				m.action = ActionCancel
-				return m, tea.Quit
-			}
-		case "f":
-			m.action = ActionFinish
-			return m, tea.Quit
-		case "enter":
-			if sel != nil {
-				m.action = ActionFocus
-				return m, tea.Quit
-			}
+			return m, tea.Sequence(func() tea.Msg {
+				handler(result, "")
+				return nil
+			}, tea.Quit)
 		}
 	}
 	return m, nil
+}
+
+// runInlineAction runs an action that doesn't need sub-TUIs, capturing output.
+func (m interactiveTUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
+	result := TUIResult{Action: action, AgentIdx: agentIdx}
+	handler := m.actionHandler
+	return m, func() tea.Msg {
+		lines := handler(result, "")
+		return actionDoneMsg{lines: lines}
+	}
+}
+
+// runSuspendAction suspends the TUI for actions that need sub-TUIs (merge, finish).
+func (m interactiveTUIModel) runSuspendAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
+	result := TUIResult{Action: action, AgentIdx: agentIdx}
+	handler := m.actionHandler
+	return m, tea.Sequence(
+		tea.Suspend,
+		func() tea.Msg {
+			// Run the action in normal terminal mode
+			handler(result, "")
+			fmt.Println()
+			fmt.Println("Press Enter to return to TUI...")
+			fmt.Scanln()
+			return nil
+		},
+	)
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
@@ -353,13 +485,13 @@ func renderActionBar(a *core.AgentState) string {
 	hasAgent := a != nil
 
 	actions := []action{
-		{"enter:focus", hasAgent},                      // focus agent window
-		{"spawn", true},                              // always available
-		{"merge", isWip},                              // wip agents only
-		{"accept", isMerged},                          // merged agents only
-		{"reject", isMerged || isResolving},            // merged or resolving
-		{"cancel", isWip || isResolving},               // wip or resolving
-		{"finish", true},                              // always available
+		{"enter:focus", hasAgent},           // focus agent window
+		{"spawn", true},                     // always available
+		{"merge", isWip},                    // wip agents only
+		{"accept", isMerged},                // merged agents only
+		{"reject", isMerged || isResolving}, // merged or resolving
+		{"cancel", isWip || isResolving},    // wip or resolving
+		{"finish", true},                    // always available
 	}
 
 	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(colorPurple)
@@ -408,31 +540,48 @@ func (m interactiveTUIModel) View() string {
 
 	if len(m.agents) == 0 {
 		b.WriteString(labelStyle.Render("  No agents running.\n"))
+	} else {
+		spinnerFrame := m.spinner.View()
+		var cards []string
+		for i, a := range m.agents {
+			cards = append(cards, renderAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
+		}
+
+		cols := m.cols()
+
+		var rows []string
+		for i := 0; i < len(cards); i += cols {
+			end := i + cols
+			if end > len(cards) {
+				end = len(cards)
+			}
+			row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
+			rows = append(rows, row)
+		}
+		b.WriteString(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	}
+	b.WriteString("\n\n")
+
+	// Show status lines from last action
+	if len(m.statusLines) > 0 {
+		statusStyle := lipgloss.NewStyle().Foreground(colorGreen)
+		for _, line := range m.statusLines {
+			b.WriteString(statusStyle.Render(line))
+			b.WriteString("\n")
+		}
 		b.WriteString("\n")
-		b.WriteString(renderActionBar(nil))
+	}
+
+	// Show text input for spawn mode
+	if m.mode == modeSpawning {
+		b.WriteString(titleStyle.Render("Task name for new agent:"))
+		b.WriteString("\n\n")
+		b.WriteString("  " + m.textInput.View())
+		b.WriteString("\n\n")
+		b.WriteString(pickerHintStyle.Render("  enter confirm · esc cancel"))
 		b.WriteString("\n")
 		return b.String()
 	}
-
-	spinnerFrame := m.spinner.View()
-	var cards []string
-	for i, a := range m.agents {
-		cards = append(cards, renderAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
-	}
-
-	cols := m.cols()
-
-	var rows []string
-	for i := 0; i < len(cards); i += cols {
-		end := i + cols
-		if end > len(cards) {
-			end = len(cards)
-		}
-		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
-		rows = append(rows, row)
-	}
-	b.WriteString(lipgloss.JoinVertical(lipgloss.Left, rows...))
-	b.WriteString("\n\n")
 
 	// Action bar based on selected agent
 	var selected *core.AgentState
@@ -445,8 +594,36 @@ func (m interactiveTUIModel) View() string {
 	return b.String()
 }
 
-// runInteractiveTUIOnce runs one iteration of the interactive TUI and returns the result.
-func runInteractiveTUIOnce(repoRoot string) TUIResult {
+// CaptureOutput captures stdout from a function and returns the output lines.
+func CaptureOutput(fn func()) []string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	r.Close()
+
+	output := strings.TrimRight(buf.String(), "\n")
+	if output == "" {
+		return nil
+	}
+	return strings.Split(output, "\n")
+}
+
+// RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
+// user triggers an action. For inline actions, output is captured and displayed
+// in the TUI. For actions needing sub-TUIs (merge, finish), the TUI is
+// temporarily suspended.
+//
+// The actionHandler receives a TUIResult and an optional spawn name (non-empty
+// only for ActionSpawn). It returns captured output lines (nil for suspended actions).
+func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult, string) []string) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
 			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
@@ -454,38 +631,15 @@ func runInteractiveTUIOnce(repoRoot string) TUIResult {
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(colorYellow)),
 	)
-	m := interactiveTUIModel{repoRoot: repoRoot, width: 100, spinner: s}
+	m := interactiveTUIModel{
+		repoRoot:      repoRoot,
+		width:         100,
+		spinner:       s,
+		actionHandler: actionHandler,
+	}
 	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	final, err := p.Run()
-	if err != nil {
+	if _, err := p.Run(); err != nil {
 		core.Fatal("TUI error: %v", err)
-	}
-	fm := final.(interactiveTUIModel)
-
-	agentIdx := -1
-	if fm.cursor >= 0 && fm.cursor < len(fm.agents) {
-		agentIdx = fm.agents[fm.cursor].Index
-	}
-	return TUIResult{Action: fm.action, AgentIdx: agentIdx}
-}
-
-// RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
-// user triggers an action; after it returns the TUI is re-launched.
-func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult)) {
-	for {
-		result := runInteractiveTUIOnce(repoRoot)
-		if result.Action == ActionNone {
-			return
-		}
-		actionHandler(result)
-		// Focus just switches tmux window — no pause needed, re-launch TUI immediately.
-		if result.Action == ActionFocus {
-			continue
-		}
-		// Pause so user can read output before TUI re-launches
-		fmt.Println()
-		fmt.Println("Press Enter to return to TUI...")
-		fmt.Scanln()
 	}
 }
