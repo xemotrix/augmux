@@ -1,12 +1,14 @@
 package core
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,9 +23,20 @@ const (
 	ActivityWorking = "working"
 )
 
-// IdleTimeout is how long a tmux pane must be inactive before the agent is
-// considered idle.
-const IdleTimeout = 10 * time.Second
+// IdleTimeout is how long the pane content must remain unchanged before the
+// agent is considered idle.
+const IdleTimeout = 1 * time.Second
+
+// paneState tracks the last known content hash and when it last changed.
+type paneState struct {
+	hash       string
+	lastChange time.Time
+}
+
+var (
+	paneStates   = make(map[string]*paneState)
+	paneStatesMu sync.Mutex
+)
 
 // AgentState holds the state for a single agent.
 type AgentState struct {
@@ -101,23 +114,43 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 	}, nil
 }
 
-// detectActivity checks the tmux pane's last activity timestamp to determine
-// whether the agent is working or idle. If the pane had output within
-// IdleTimeout, the agent is considered working.
+// capturePaneHash captures the tmux pane content and returns a hex-encoded
+// SHA-256 hash, or an empty string on error.
+func capturePaneHash(window string) string {
+	content, err := TmuxQuery("capture-pane", "-t", window, "-p")
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256([]byte(content))
+	return fmt.Sprintf("%x", h)
+}
+
+// detectActivity captures the tmux pane content, hashes it, and compares with
+// the previous snapshot. If the content changed, the agent is "working". If it
+// has stayed the same for longer than IdleTimeout, the agent is "idle".
 func detectActivity(window string) string {
-	epochStr, err := TmuxQuery("display-message", "-t", window, "-p", "#{pane_last_activity}")
-	if err != nil {
+	hash := capturePaneHash(window)
+	if hash == "" {
 		return ActivityIdle
 	}
-	epoch, err := strconv.ParseInt(epochStr, 10, 64)
-	if err != nil {
-		return ActivityIdle
-	}
-	lastActivity := time.Unix(epoch, 0)
-	if time.Since(lastActivity) <= IdleTimeout {
+
+	now := time.Now()
+
+	paneStatesMu.Lock()
+	defer paneStatesMu.Unlock()
+
+	ps, ok := paneStates[window]
+	if !ok || ps.hash != hash {
+		// First check or content changed — mark as working.
+		paneStates[window] = &paneState{hash: hash, lastChange: now}
 		return ActivityWorking
 	}
-	return ActivityIdle
+
+	// Content unchanged — check how long it's been stable.
+	if now.Sub(ps.lastChange) > IdleTimeout {
+		return ActivityIdle
+	}
+	return ActivityWorking
 }
 
 // ListAgents returns all agent indices, sorted.
