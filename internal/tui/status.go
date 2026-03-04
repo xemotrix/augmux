@@ -57,14 +57,21 @@ func truncate(s string, n int) string {
 	return s[:n-3] + "..."
 }
 
-func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
+func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
-		return colorCyan
+		return colorCyan // merged
 	}
 	if a.Resolving != "" {
-		return colorYellow
+		return colorRed // resolving conflicts
 	}
-	return colorGreen
+	if a.Activity == core.ActivityWorking {
+		return colorYellow // working
+	}
+	// idle
+	if commitsAhead > 0 {
+		return colorGreen // idle, some commits
+	}
+	return colorDimGray // idle, no commits
 }
 
 func activityRawStr(a *core.AgentState) string {
@@ -83,7 +90,16 @@ func activityIndicator(a *core.AgentState, spinnerFrame string) string {
 
 func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame string, selected ...bool) string {
 	sel := len(selected) > 0 && selected[0]
-	borderColor := agentBorderColor(a)
+
+	// Compute commits ahead early — needed for border color and branch line
+	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
+	if ahead == "" {
+		ahead = "?"
+	}
+	aheadNum := 0
+	fmt.Sscanf(ahead, "%d", &aheadNum)
+
+	borderColor := agentBorderColor(a, aheadNum)
 	bdr := lipgloss.NewStyle().Foreground(borderColor)
 	if sel {
 		bdr = bdr.Bold(true)
@@ -131,10 +147,6 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 		strings.Repeat(" ", namePad) + activityStr + " " + bdr.Render(cV)
 
 	// Branch line
-	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
-	if ahead == "" {
-		ahead = "?"
-	}
 	aheadStr := ahead + " ↑"
 
 	// Count uncommitted changes in the worktree
