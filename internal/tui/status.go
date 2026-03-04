@@ -63,6 +63,9 @@ func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalCol
 	if a.Resolving != "" {
 		return colorRed // resolving conflicts
 	}
+	if a.HasConflicts {
+		return colorRed // would conflict if merged
+	}
 	if a.Activity == core.ActivityWorking {
 		return colorYellow // working
 	}
@@ -181,6 +184,9 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 		if err != nil {
 			continue
 		}
+		if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
+			a.HasConflicts = core.DetectConflicts(repoRoot, srcBranch, a.Branch)
+		}
 		cards = append(cards, renderAgentCard(a, repoRoot, srcBranch, "⠋"))
 	}
 
@@ -229,11 +235,16 @@ func tickEvery(d time.Duration) tea.Cmd {
 
 func (m *interactiveTUIModel) refreshAgents() {
 	indices := core.ListAgents(m.repoRoot)
+	srcBranch := core.SourceBranch(m.repoRoot)
 	m.agents = nil
 	for _, idx := range indices {
 		a, err := core.ReadAgent(m.repoRoot, idx)
 		if err != nil {
 			continue
+		}
+		// Proactively detect merge conflicts for WIP agents.
+		if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
+			a.HasConflicts = core.DetectConflicts(m.repoRoot, srcBranch, a.Branch)
 		}
 		m.agents = append(m.agents, a)
 	}

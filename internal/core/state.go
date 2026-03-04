@@ -40,14 +40,23 @@ var (
 
 // AgentState holds the state for a single agent.
 type AgentState struct {
-	Index       int
-	Description string
-	Branch      string
-	Worktree    string
-	MergeCommit string
-	Resolving   string
-	Activity    string // "idle" or "working"
-	Window      string // tmux window name (e.g. "ax-1-fix-auth")
+	Index        int
+	Description  string
+	Branch       string
+	Worktree     string
+	MergeCommit  string
+	Resolving    string
+	Activity     string // "idle" or "working"
+	Window       string // tmux window name (e.g. "ax-1-fix-auth")
+	HasConflicts bool   // true if merging this branch would produce conflicts
+}
+
+// DetectConflicts checks whether merging agentBranch into srcBranch would
+// produce conflicts. It uses "git merge-tree --write-tree" which performs an
+// in-memory merge without touching the working tree or index.
+func DetectConflicts(repoRoot, srcBranch, agentBranch string) bool {
+	_, err := Git(repoRoot, "merge-tree", "--write-tree", srcBranch, agentBranch)
+	return err != nil
 }
 
 // FindRepoRoot finds the git repo root from the current directory.

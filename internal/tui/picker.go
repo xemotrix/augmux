@@ -182,10 +182,14 @@ func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int
 		fmt.Println("No agents found.")
 		return nil
 	}
+	srcBranch := core.SourceBranch(repoRoot)
 	var states []*core.AgentState
 	for _, idx := range agents {
 		a, err := core.ReadAgent(repoRoot, idx)
 		if err == nil {
+			if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
+				a.HasConflicts = core.DetectConflicts(repoRoot, srcBranch, a.Branch)
+			}
 			states = append(states, a)
 		}
 	}
@@ -222,6 +226,9 @@ func AgentStatusRaw(a *core.AgentState) string {
 	if a.Resolving != "" {
 		return "● resolving"
 	}
+	if a.HasConflicts {
+		return "● conflicts"
+	}
 	return "● wip"
 }
 
@@ -231,6 +238,9 @@ func AgentStatusStyled(a *core.AgentState, text string) string {
 	}
 	if a.Resolving != "" {
 		return badgeResolving.Render(text)
+	}
+	if a.HasConflicts {
+		return badgeConflicts.Render(text)
 	}
 	return badgeWip.Render(text)
 }
