@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -20,6 +21,10 @@ const (
 	ActivityWorking = "working"
 )
 
+// IdleTimeout is how long a tmux pane must be inactive before the agent is
+// considered idle.
+const IdleTimeout = 10 * time.Second
+
 // AgentState holds the state for a single agent.
 type AgentState struct {
 	Index       int
@@ -29,6 +34,7 @@ type AgentState struct {
 	MergeCommit string
 	Resolving   string
 	Activity    string // "idle" or "working"
+	Window      string // tmux window name (e.g. "augmux-1")
 }
 
 // FindRepoRoot finds the git repo root from the current directory.
@@ -78,10 +84,11 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 	if !IsDir(td) {
 		return nil, fmt.Errorf("agent %d not found", idx)
 	}
-	activity := ReadFileContent(filepath.Join(td, "activity"))
-	if activity == "" {
-		activity = ActivityIdle
+	window := ReadFileContent(filepath.Join(td, "window"))
+	if window == "" {
+		window = fmt.Sprintf("augmux-%d", idx)
 	}
+	activity := detectActivity(window)
 	return &AgentState{
 		Index:       idx,
 		Description: ReadFileContent(filepath.Join(td, "description")),
@@ -90,7 +97,27 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 		MergeCommit: ReadFileContent(filepath.Join(td, "merge_commit")),
 		Resolving:   ReadFileContent(filepath.Join(td, "resolving")),
 		Activity:    activity,
+		Window:      window,
 	}, nil
+}
+
+// detectActivity checks the tmux pane's last activity timestamp to determine
+// whether the agent is working or idle. If the pane had output within
+// IdleTimeout, the agent is considered working.
+func detectActivity(window string) string {
+	epochStr, err := TmuxQuery("display-message", "-t", window, "-p", "#{pane_last_activity}")
+	if err != nil {
+		return ActivityIdle
+	}
+	epoch, err := strconv.ParseInt(epochStr, 10, 64)
+	if err != nil {
+		return ActivityIdle
+	}
+	lastActivity := time.Unix(epoch, 0)
+	if time.Since(lastActivity) <= IdleTimeout {
+		return ActivityWorking
+	}
+	return ActivityIdle
 }
 
 // ListAgents returns all agent indices, sorted.

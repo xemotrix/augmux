@@ -50,10 +50,11 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) {
 
 	// Write rules file for agents that support it.
 	rulesFile := filepath.Join(td, "rules.md")
-	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch, td)
+	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
 	winName := fmt.Sprintf("augmux-%d", idx)
+	core.WriteFileContent(filepath.Join(td, "window"), winName)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
 	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
 		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))

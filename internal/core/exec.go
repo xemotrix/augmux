@@ -59,6 +59,11 @@ func TmuxRun(args ...string) error {
 	return err
 }
 
+// TmuxQuery runs a tmux command and returns its trimmed output.
+func TmuxQuery(args ...string) (string, error) {
+	return RunCmd("tmux", args...)
+}
+
 // PromptUser shows a prompt and reads a line from stdin.
 func PromptUser(msg string) string {
 	fmt.Print(msg)

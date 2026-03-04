@@ -20,17 +20,6 @@ in parallel using tmux windows and git worktrees.
 - **Worktree path:** ` + "`{{WORKTREE}}`" + `
 - **Source branch:** ` + "`{{SOURCE_BRANCH}}`" + ` (the branch your work will be merged back into)
 
-## Activity tracking (CRITICAL)
-
-augmux tracks whether you are working or idle.
-
-1. Your **very first tool call** in every response must be:
-  ` + "`" + `echo working > {{STATE_DIR}}/activity` + "`" + `
-2. Your **very last tool call** in every response must be:
-  ` + "`" + `echo idle > {{STATE_DIR}}/activity` + "`" + `
-
-These are the only two times you should write to the activity file. After you echo ` + "`idle`" + `, your response is complete — do not make any more tool calls or write any more text.
-
 ## Important instructions
 
 - When you finish your task, **commit your changes** with a clear commit message unless the user tells you otherwise.
@@ -40,13 +29,12 @@ These are the only two times you should write to the activity file. After you ec
 `
 
 // BuildRules renders the rules template with the given values.
-func BuildRules(task, branch, worktree, sourceBranch, stateDir string) string {
+func BuildRules(task, branch, worktree, sourceBranch string) string {
 	r := strings.NewReplacer(
 		"{{TASK}}", task,
 		"{{BRANCH}}", branch,
 		"{{WORKTREE}}", worktree,
 		"{{SOURCE_BRANCH}}", sourceBranch,
-		"{{STATE_DIR}}", stateDir,
 	)
 	return r.Replace(RulesTemplate)
 }
