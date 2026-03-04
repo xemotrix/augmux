@@ -33,8 +33,8 @@ func Run() {
 		cmdCancel(args[1:])
 	case "finish":
 		cmdFinish()
-	case "clean":
-		cmdClean()
+	case "nuke":
+		cmdNuke()
 	case "help", "-h", "--help":
 		cmdHelp()
 	default:
@@ -171,7 +171,7 @@ func cmdFinish() {
 	ops.FinishAll(repoRoot)
 }
 
-func cmdClean() {
+func cmdNuke() {
 	repoRoot, err := core.FindRepoFromState()
 	if err != nil {
 		core.Fatal(err.Error())
@@ -200,7 +200,7 @@ Usage:
   augmux reject <id>                  Undo merge, keep agent alive to fix and re-merge
   augmux cancel <id>                  Remove agent and discard all its changes
   augmux finish                       Merge all + accept all (one-shot cleanup)
-  augmux clean                        Force cleanup (no merge, discard all)
+  augmux nuke                         Force cleanup (no merge, discard all)
   augmux help                         Show this help
 
 Workflow:

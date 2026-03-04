@@ -104,7 +104,7 @@ func MergeAll(repoRoot string) {
 	}
 	if unmerged > 0 {
 		fmt.Printf("%d agent(s) still unmerged.\n", unmerged)
-		fmt.Println("Use 'augmux merge <id>' to retry individually, or 'augmux clean' to discard.")
+		fmt.Println("Use 'augmux merge <id>' to retry individually, or 'augmux nuke' to discard.")
 	}
 	if merged == 0 && unmerged == 0 {
 		fmt.Println("✓ No agents remaining.")

@@ -103,14 +103,14 @@ When a merge has conflicts, you get three options:
 2. **Auto-fix with AI** — runs the configured agent CLI in non-interactive mode to resolve conflicts, keeping functionality from both sides.
 3. **Abort** — resets the working tree, agent is preserved for retry.
 
-### Finishing & Cleaning
+### Finishing & Nuking
 
 ```bash
 # Merge all + accept all in one shot
 augmux finish
 
 # Force cleanup — discard everything without merging
-augmux clean
+augmux nuke
 ```
 
 ## Typical Workflow
