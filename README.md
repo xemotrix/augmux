@@ -98,11 +98,10 @@ After rejecting, switch to the agent's window, fix the issue, commit, and run `a
 
 ### Conflict resolution
 
-When a merge has conflicts, you get three options:
+When a merge has conflicts, you get two options:
 
 1. **Continue** — conflict markers are left in the working tree for manual resolution. After fixing, `git add`, `git commit`, then `augmux merge <id>` again.
-2. **Auto-fix with AI** — runs the configured agent CLI in non-interactive mode to resolve conflicts, keeping functionality from both sides.
-3. **Abort** — resets the working tree, agent is preserved for retry.
+2. **Abort** — resets the working tree, agent is preserved for retry.
 
 ### Cancelling
 
@@ -122,6 +121,9 @@ augmux nuke
 ```
 
 A conflict 1!!!
+
+A conflict 2!!! wtf
+
 ## Typical Workflow
 
 ```bash

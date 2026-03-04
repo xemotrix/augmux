@@ -181,19 +181,18 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) tui.ActionRes
 			if idx >= 0 {
 				err := ops.MergeOne(&sink, repoRoot, idx, ops.MergeTUI)
 				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
-					autoFixLabel := "Auto-fix with AI"
-					if conflictErr.AgentLabel != "" {
-						autoFixLabel = fmt.Sprintf("Auto-fix with %s", conflictErr.AgentLabel)
-					}
 					return tui.MenuRequest{
 						Title: fmt.Sprintf("Conflict merging agent %d — how to resolve?", idx),
 						Options: []string{
 							"Continue — leave conflicts, resolve manually",
-							autoFixLabel + " — resolve conflicts keeping both sides",
 							"Abort — discard merge and reset",
 						},
 						Callback: func(choice int) tui.ActionResult {
 							var sink2 bytes.Buffer
+							// Remap choice: 0=continue, 1=abort (maps to default in ResolveConflict)
+							if choice == 1 {
+								choice = -1
+							}
 							ops.ResolveConflict(&sink2, conflictErr, choice)
 							return tui.ActionDone{}
 						},

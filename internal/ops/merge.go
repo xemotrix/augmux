@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xemotrix/augmux/internal/agent"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/tui"
 )
@@ -27,14 +26,13 @@ const (
 
 // MergeConflictErr is returned by MergeOne in MergeTUI mode when conflicts
 // are detected. The working tree is left in the conflicted state so the
-// caller can resolve, auto-fix, or abort.
+// caller can resolve or abort.
 type MergeConflictErr struct {
-	RepoRoot   string
-	AgentIdx   int
-	AgentDesc  string
-	MergeMsg   string
-	Files      string // newline-separated list of conflicting files
-	AgentLabel string // AI agent CLI label (e.g. "Claude Code")
+	RepoRoot  string
+	AgentIdx  int
+	AgentDesc string
+	MergeMsg  string
+	Files     string // newline-separated list of conflicting files
 }
 
 func (e *MergeConflictErr) Error() string {
@@ -157,14 +155,12 @@ func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 	case MergeTUI:
 		// Return conflict info without resetting — caller shows inline menu.
 		files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-		aiAgent := agent.ActiveAgent()
 		return &MergeConflictErr{
-			RepoRoot:   repoRoot,
-			AgentIdx:   idx,
-			AgentDesc:  ag.Description,
-			MergeMsg:   mergeMsg,
-			Files:      files,
-			AgentLabel: aiAgent.Label(),
+			RepoRoot:  repoRoot,
+			AgentIdx:  idx,
+			AgentDesc: ag.Description,
+			MergeMsg:  mergeMsg,
+			Files:     files,
 		}
 
 	default: // MergeInteractive
@@ -173,12 +169,6 @@ func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 		case conflictContinue:
 			core.WriteFileContent(td+"/resolving", mergeMsg)
 			return fmt.Errorf("resolving conflicts")
-		case conflictAutoFixed:
-			sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
-			core.WriteFileContent(td+"/merge_commit", sha)
-			fmt.Fprintln(w)
-			printAcceptRejectHint(w, idx)
-			return nil
 		default:
 			fmt.Fprintf(w, "  Agent %d preserved for retry.\n", idx)
 			return fmt.Errorf("aborted")
