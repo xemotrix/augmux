@@ -363,6 +363,16 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	isMerged := sel != nil && sel.MergeCommit != ""
 	isResolving := sel != nil && sel.Resolving != ""
 
+	// Check if agent has commits ahead of source branch
+	hasCommits := false
+	if sel != nil {
+		srcBranch := core.SourceBranch(m.repoRoot)
+		ahead := core.GitMust(m.repoRoot, "rev-list", "--count", srcBranch+".."+sel.Branch)
+		aheadNum := 0
+		fmt.Sscanf(ahead, "%d", &aheadNum)
+		hasCommits = aheadNum > 0
+	}
+
 	agentIdx := -1
 	if sel != nil {
 		agentIdx = sel.Index
@@ -402,7 +412,7 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusLines = nil
 		return m, textinput.Blink
 	case "m":
-		if isWip {
+		if isWip && hasCommits {
 			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
@@ -470,7 +480,7 @@ func (m interactiveTUIModel) runSuspendAction(action TUIAction, agentIdx int) (t
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
-func renderActionBar(a *core.AgentState) string {
+func renderActionBar(a *core.AgentState, repoRoot string) string {
 	type action struct {
 		name    string
 		enabled bool
@@ -480,12 +490,22 @@ func renderActionBar(a *core.AgentState) string {
 	isMerged := a != nil && a.MergeCommit != ""
 	isResolving := a != nil && a.Resolving != ""
 
+	// Check if agent has commits ahead of source branch
+	hasCommits := false
+	if a != nil && repoRoot != "" {
+		srcBranch := core.SourceBranch(repoRoot)
+		ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
+		aheadNum := 0
+		fmt.Sscanf(ahead, "%d", &aheadNum)
+		hasCommits = aheadNum > 0
+	}
+
 	hasAgent := a != nil
 
 	actions := []action{
 		{"enter:focus", hasAgent},           // focus agent window
 		{"spawn", true},                     // always available
-		{"merge", isWip},                    // wip agents only
+		{"merge", isWip && hasCommits},      // wip agents with commits only
 		{"accept", isMerged},                // merged agents only
 		{"reject", isMerged || isResolving}, // merged or resolving
 		{"cancel", isWip || isResolving},    // wip or resolving
@@ -582,7 +602,7 @@ func (m interactiveTUIModel) View() string {
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	b.WriteString(renderActionBar(selected))
+	b.WriteString(renderActionBar(selected, m.repoRoot))
 	b.WriteString("\n")
 
 	return b.String()
