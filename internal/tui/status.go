@@ -37,40 +37,57 @@ func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
 }
 
 func renderAgentCard(a *core.AgentState, repoRoot, srcBranch string) string {
+	borderColor := agentBorderColor(a)
+	bdr := lipgloss.NewStyle().Foreground(borderColor)
+
 	statusRaw := AgentStatusRaw(a)
 	statusStyled := AgentStatusStyled(a, statusRaw)
 
-	idStr := fmt.Sprintf("Agent %d", a.Index)
-	gap := textWidth - len(idStr) - len(statusRaw)
-	if gap < 1 {
-		gap = 1
+	// Top border: ╭─❮3❯──────────────────────── ● active ─╮
+	idLabel := fmt.Sprintf("❮%d❯", a.Index)
+	idStyled := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(idLabel)
+
+	// cardWidth - "╭─"(2) - idLabel - fill - " status "(1+statusRaw+1) - "─╮"(2)
+	used := 2 + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + 2
+	fill := cardWidth - used
+	if fill < 1 {
+		fill = 1
 	}
-	header := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(idStr) +
-		strings.Repeat(" ", gap) + statusStyled
+	topLine := bdr.Render("╭─") + idStyled +
+		bdr.Render(strings.Repeat("─", fill)) +
+		" " + statusStyled + " " +
+		bdr.Render("─╮")
 
+	// Description line
 	name := truncate(a.Description, textWidth)
-	nameLine := valueStyle.Render(name)
+	namePad := textWidth - lipgloss.Width(name)
+	if namePad < 0 {
+		namePad = 0
+	}
+	nameLine := bdr.Render("│") + " " + valueStyle.Render(name) +
+		strings.Repeat(" ", namePad) + " " + bdr.Render("│")
 
+	// Branch line
 	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 	if ahead == "" {
 		ahead = "?"
 	}
 	aheadStr := ahead + " ↑"
 	iconWidth := 2 // branchIcon + space
-	branch := truncate(a.Branch, textWidth-len(aheadStr)-1-iconWidth)
-	branchGap := textWidth - len(branch) - iconWidth - len(aheadStr)
+	maxBranch := textWidth - lipgloss.Width(aheadStr) - 1 - iconWidth
+	branch := truncate(a.Branch, maxBranch)
+	branchGap := textWidth - lipgloss.Width(branch) - iconWidth - lipgloss.Width(aheadStr)
 	if branchGap < 1 {
 		branchGap = 1
 	}
-	branchLine := RenderBranch(branch) + strings.Repeat(" ", branchGap) + aheadStyle.Render(aheadStr)
+	branchLine := bdr.Render("│") + " " + RenderBranch(branch) +
+		strings.Repeat(" ", branchGap) + aheadStyle.Render(aheadStr) +
+		" " + bdr.Render("│")
 
-	content := header + "\n" + nameLine + "\n" + branchLine
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(agentBorderColor(a)).
-		Padding(0, 1).
-		Width(cardInner)
-	return style.Render(content)
+	// Bottom border
+	bottomLine := bdr.Render("╰" + strings.Repeat("─", cardWidth-2) + "╯")
+
+	return topLine + "\n" + nameLine + "\n" + branchLine + "\n" + bottomLine
 }
 
 func RenderStatusView(repoRoot string, termWidth int) string {
