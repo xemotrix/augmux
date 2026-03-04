@@ -164,7 +164,7 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 	srcBranch := core.SourceBranch(repoRoot)
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("⚡ augmux session"))
+	b.WriteString(titleStyle.Render("  \uebc8 augmux session"))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
 		headerKeyStyle.Render("Repo:"), headerValStyle.Render(repoRoot),
@@ -536,7 +536,7 @@ func (m interactiveTUIModel) View() string {
 	srcBranch := core.SourceBranch(m.repoRoot)
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("⚡ augmux session"))
+	b.WriteString(titleStyle.Render("  \uebc8 augmux session"))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
 		headerKeyStyle.Render("Repo:"), headerValStyle.Render(m.repoRoot),
