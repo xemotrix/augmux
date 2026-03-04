@@ -14,6 +14,12 @@ const (
 	WorktreesDirName = ".augmux-worktrees"
 )
 
+// Agent activity states.
+const (
+	ActivityIdle    = "idle"
+	ActivityWorking = "working"
+)
+
 // AgentState holds the state for a single agent.
 type AgentState struct {
 	Index       int
@@ -22,6 +28,7 @@ type AgentState struct {
 	Worktree    string
 	MergeCommit string
 	Resolving   string
+	Activity    string // "idle" or "working"
 }
 
 // FindRepoRoot finds the git repo root from the current directory.
@@ -71,6 +78,10 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 	if !IsDir(td) {
 		return nil, fmt.Errorf("agent %d not found", idx)
 	}
+	activity := ReadFileContent(filepath.Join(td, "activity"))
+	if activity == "" {
+		activity = ActivityIdle
+	}
 	return &AgentState{
 		Index:       idx,
 		Description: ReadFileContent(filepath.Join(td, "description")),
@@ -78,6 +89,7 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 		Worktree:    ReadFileContent(filepath.Join(td, "worktree")),
 		MergeCommit: ReadFileContent(filepath.Join(td, "merge_commit")),
 		Resolving:   ReadFileContent(filepath.Join(td, "resolving")),
+		Activity:    activity,
 	}, nil
 }
 

@@ -50,7 +50,7 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) {
 
 	// Write rules file for agents that support it.
 	rulesFile := filepath.Join(td, "rules.md")
-	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
+	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch, td)
 	core.WriteFileContent(rulesFile, rulesContent)
 
 	winName := fmt.Sprintf("augmux-%d", idx)

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
@@ -63,7 +64,21 @@ func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
 	return colorGreen
 }
 
-func renderAgentCard(a *core.AgentState, repoRoot, srcBranch string, selected ...bool) string {
+func activityRawStr(a *core.AgentState) string {
+	if a.Activity == core.ActivityWorking {
+		return "⠋ working"
+	}
+	return "● idle"
+}
+
+func activityIndicator(a *core.AgentState, spinnerFrame string) string {
+	if a.Activity == core.ActivityWorking {
+		return lipgloss.NewStyle().Foreground(colorYellow).Render(spinnerFrame + " working")
+	}
+	return lipgloss.NewStyle().Foreground(colorDimGray).Render("● idle")
+}
+
+func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame string, selected ...bool) string {
 	sel := len(selected) > 0 && selected[0]
 	borderColor := agentBorderColor(a)
 	bdr := lipgloss.NewStyle().Foreground(borderColor)
@@ -97,14 +112,20 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch string, selected ..
 		" " + statusStyled + " " +
 		bdr.Render(cH+cTR)
 
-	// Description line
-	name := truncate(a.Description, textWidth)
-	namePad := textWidth - lipgloss.Width(name)
-	if namePad < 0 {
-		namePad = 0
+	// Description line with activity indicator on the right
+	activityStr := activityIndicator(a, spinnerFrame)
+	activityRaw := activityRawStr(a)
+	maxName := textWidth - lipgloss.Width(activityRaw) - 1
+	if maxName < 10 {
+		maxName = 10
+	}
+	name := truncate(a.Description, maxName)
+	namePad := textWidth - lipgloss.Width(name) - lipgloss.Width(activityRaw)
+	if namePad < 1 {
+		namePad = 1
 	}
 	nameLine := bdr.Render(cV) + " " + valueStyle.Render(name) +
-		strings.Repeat(" ", namePad) + " " + bdr.Render(cV)
+		strings.Repeat(" ", namePad) + activityStr + " " + bdr.Render(cV)
 
 	// Branch line
 	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
@@ -158,7 +179,7 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 		if err != nil {
 			continue
 		}
-		cards = append(cards, renderAgentCard(a, repoRoot, srcBranch))
+		cards = append(cards, renderAgentCard(a, repoRoot, srcBranch, "⠋"))
 	}
 
 	cols := termWidth / (cardWidth + 1)
@@ -193,6 +214,7 @@ type interactiveTUIModel struct {
 	agents   []*core.AgentState
 	quitting bool
 	action   TUIAction // pending action to execute after TUI exits
+	spinner  spinner.Model
 }
 
 type tickMsg time.Time
@@ -231,7 +253,7 @@ func (m interactiveTUIModel) cols() int {
 }
 
 func (m interactiveTUIModel) Init() tea.Cmd {
-	return tickEvery(500 * time.Millisecond)
+	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick)
 }
 
 func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -242,6 +264,10 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.refreshAgents()
 		return m, tickEvery(500 * time.Millisecond)
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	case tea.KeyMsg:
 		n := len(m.agents)
 		cols := m.cols()
@@ -368,9 +394,10 @@ func (m interactiveTUIModel) View() string {
 		return b.String()
 	}
 
+	spinnerFrame := m.spinner.View()
 	var cards []string
 	for i, a := range m.agents {
-		cards = append(cards, renderAgentCard(a, m.repoRoot, srcBranch, i == m.cursor))
+		cards = append(cards, renderAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
 	}
 
 	cols := m.cols()
@@ -400,7 +427,11 @@ func (m interactiveTUIModel) View() string {
 
 // runInteractiveTUIOnce runs one iteration of the interactive TUI and returns the result.
 func runInteractiveTUIOnce(repoRoot string) TUIResult {
-	m := interactiveTUIModel{repoRoot: repoRoot, width: 100}
+	s := spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithStyle(lipgloss.NewStyle().Foreground(colorYellow)),
+	)
+	m := interactiveTUIModel{repoRoot: repoRoot, width: 100, spinner: s}
 	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()

@@ -20,6 +20,17 @@ in parallel using tmux windows and git worktrees.
 - **Worktree path:** ` + "`{{WORKTREE}}`" + `
 - **Source branch:** ` + "`{{SOURCE_BRANCH}}`" + ` (the branch your work will be merged back into)
 
+## Activity tracking
+
+augmux tracks your activity state. You **MUST** follow these rules:
+
+- **BEFORE doing anything else**, set your state to working:
+  ` + "`" + `echo working > {{STATE_DIR}}/activity` + "`" + `
+- **ALWAYS** set your state back to idle when you are done:
+  ` + "`" + `echo idle > {{STATE_DIR}}/activity` + "`" + `
+
+This is critical — the orchestrator UI relies on this to show your current status.
+
 ## Important instructions
 
 - When you finish your task, **commit your changes** with a clear commit message unless the user tells you otherwise.
@@ -29,12 +40,13 @@ in parallel using tmux windows and git worktrees.
 `
 
 // BuildRules renders the rules template with the given values.
-func BuildRules(task, branch, worktree, sourceBranch string) string {
+func BuildRules(task, branch, worktree, sourceBranch, stateDir string) string {
 	r := strings.NewReplacer(
 		"{{TASK}}", task,
 		"{{BRANCH}}", branch,
 		"{{WORKTREE}}", worktree,
 		"{{SOURCE_BRANCH}}", sourceBranch,
+		"{{STATE_DIR}}", stateDir,
 	)
 	return r.Replace(RulesTemplate)
 }
