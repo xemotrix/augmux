@@ -479,9 +479,9 @@ func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult)) {
 			return
 		}
 		actionHandler(result)
-		// Focus just switches tmux window — no pause needed, exit the TUI loop.
+		// Focus just switches tmux window — no pause needed, re-launch TUI immediately.
 		if result.Action == ActionFocus {
-			return
+			continue
 		}
 		// Pause so user can read output before TUI re-launches
 		fmt.Println()
