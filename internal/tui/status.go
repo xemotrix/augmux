@@ -10,6 +10,25 @@ import (
 	"github.com/xemotrix/augmux/internal/core"
 )
 
+// TUIAction represents an action the user triggered from the interactive TUI.
+type TUIAction int
+
+const (
+	ActionNone TUIAction = iota
+	ActionSpawn
+	ActionMerge
+	ActionAccept
+	ActionReject
+	ActionCancel
+	ActionFinish
+)
+
+// TUIResult holds the result of an interactive TUI session.
+type TUIResult struct {
+	Action   TUIAction
+	AgentIdx int // selected agent index, or -1 if none
+}
+
 const (
 	cardWidth = 42
 	cardInner = cardWidth - 2 // minus border (2); lipgloss Width includes padding
@@ -173,6 +192,7 @@ type interactiveTUIModel struct {
 	cursor   int // index into the agents slice
 	agents   []*core.AgentState
 	quitting bool
+	action   TUIAction // pending action to execute after TUI exits
 }
 
 type tickMsg time.Time
@@ -225,6 +245,16 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		n := len(m.agents)
 		cols := m.cols()
+
+		// Resolve selected agent for action guards
+		var sel *core.AgentState
+		if m.cursor >= 0 && m.cursor < n {
+			sel = m.agents[m.cursor]
+		}
+		isActive := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
+		isMerged := sel != nil && sel.MergeCommit != ""
+		isResolving := sel != nil && sel.Resolving != ""
+
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			m.quitting = true
@@ -245,6 +275,33 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor+cols < n {
 				m.cursor += cols
 			}
+		// Action keys
+		case "s":
+			m.action = ActionSpawn
+			return m, tea.Quit
+		case "m":
+			if isActive {
+				m.action = ActionMerge
+				return m, tea.Quit
+			}
+		case "a":
+			if isMerged {
+				m.action = ActionAccept
+				return m, tea.Quit
+			}
+		case "r":
+			if isMerged || isResolving {
+				m.action = ActionReject
+				return m, tea.Quit
+			}
+		case "c":
+			if isActive || isResolving {
+				m.action = ActionCancel
+				return m, tea.Quit
+			}
+		case "f":
+			m.action = ActionFinish
+			return m, tea.Quit
 		}
 	}
 	return m, nil
@@ -341,11 +398,36 @@ func (m interactiveTUIModel) View() string {
 	return b.String()
 }
 
-func RunInteractiveTUI(repoRoot string) {
+// runInteractiveTUIOnce runs one iteration of the interactive TUI and returns the result.
+func runInteractiveTUIOnce(repoRoot string) TUIResult {
 	m := interactiveTUIModel{repoRoot: repoRoot, width: 100}
 	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	final, err := p.Run()
+	if err != nil {
 		core.Fatal("TUI error: %v", err)
+	}
+	fm := final.(interactiveTUIModel)
+
+	agentIdx := -1
+	if fm.cursor >= 0 && fm.cursor < len(fm.agents) {
+		agentIdx = fm.agents[fm.cursor].Index
+	}
+	return TUIResult{Action: fm.action, AgentIdx: agentIdx}
+}
+
+// RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
+// user triggers an action; after it returns the TUI is re-launched.
+func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult)) {
+	for {
+		result := runInteractiveTUIOnce(repoRoot)
+		if result.Action == ActionNone {
+			return
+		}
+		actionHandler(result)
+		// Pause so user can read output before TUI re-launches
+		fmt.Println()
+		fmt.Println("Press Enter to return to TUI...")
+		fmt.Scanln()
 	}
 }

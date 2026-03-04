@@ -59,7 +59,7 @@ func cmdTUI() {
 	if err != nil {
 		core.Fatal(err.Error())
 	}
-	tui.RunInteractiveTUI(repoRoot)
+	tui.RunInteractiveTUI(repoRoot, tuiActionHandler(repoRoot))
 }
 
 func cmdStatus(args []string) {
@@ -68,7 +68,7 @@ func cmdStatus(args []string) {
 		core.Fatal(err.Error())
 	}
 	if len(args) > 0 && (args[0] == "--watch" || args[0] == "-w") {
-		tui.RunInteractiveTUI(repoRoot)
+		tui.RunInteractiveTUI(repoRoot, tuiActionHandler(repoRoot))
 		return
 	}
 	fmt.Println(tui.RenderStatusView(repoRoot, 120))
@@ -169,6 +169,40 @@ func cmdCancel(args []string) {
 		ops.CancelOne(repoRoot, idx)
 	}
 }
+
+func tuiActionHandler(repoRoot string) func(tui.TUIResult) {
+	return func(result tui.TUIResult) {
+		switch result.Action {
+		case tui.ActionSpawn:
+			ops.Spawn(repoRoot, nil)
+		case tui.ActionMerge:
+			if result.AgentIdx >= 0 {
+				if err := ops.MergeOne(repoRoot, result.AgentIdx); err != nil {
+					fmt.Printf("  ⚠ %v\n", err)
+				}
+			}
+		case tui.ActionAccept:
+			if result.AgentIdx >= 0 {
+				if err := ops.AcceptOne(repoRoot, result.AgentIdx); err != nil {
+					fmt.Printf("  ⚠ %v\n", err)
+				}
+			}
+		case tui.ActionReject:
+			if result.AgentIdx >= 0 {
+				if err := ops.RejectOne(repoRoot, result.AgentIdx); err != nil {
+					fmt.Printf("  ⚠ %v\n", err)
+				}
+			}
+		case tui.ActionCancel:
+			if result.AgentIdx >= 0 {
+				ops.CancelOne(repoRoot, result.AgentIdx)
+			}
+		case tui.ActionFinish:
+			ops.FinishAll(repoRoot)
+		}
+	}
+}
+
 
 
 func cmdFinish() {
