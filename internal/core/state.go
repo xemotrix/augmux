@@ -113,15 +113,17 @@ func ListAgents(repoRoot string) []int {
 	return indices
 }
 
-// NextAgentIdx returns the next available agent index.
+// NextAgentIdx returns the lowest available agent index (starting from 1).
 func NextAgentIdx(repoRoot string) int {
-	max := 0
+	taken := make(map[int]bool)
 	for _, idx := range ListAgents(repoRoot) {
-		if idx > max {
-			max = idx
+		taken[idx] = true
+	}
+	for i := 1; ; i++ {
+		if !taken[i] {
+			return i
 		}
 	}
-	return max + 1
 }
 
 // SafeName sanitizes a name for use in branch/path names.
