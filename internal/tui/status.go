@@ -97,7 +97,7 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 	statusRaw := AgentStatusRaw(a)
 	statusStyled := AgentStatusStyled(a, statusRaw)
 
-	// Top border: ╭─❮3❯──────────────────────── ● active ─╮
+	// Top border: ╭─❮3❯──────────────────────── ● wip ─╮
 	idLabel := fmt.Sprintf("❮%d❯", a.Index)
 	idStyled := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(idLabel)
 
@@ -277,7 +277,7 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cursor >= 0 && m.cursor < n {
 			sel = m.agents[m.cursor]
 		}
-		isActive := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
+		isWip := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
 		isMerged := sel != nil && sel.MergeCommit != ""
 		isResolving := sel != nil && sel.Resolving != ""
 
@@ -306,7 +306,7 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.action = ActionSpawn
 			return m, tea.Quit
 		case "m":
-			if isActive {
+			if isWip {
 				m.action = ActionMerge
 				return m, tea.Quit
 			}
@@ -321,7 +321,7 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		case "c":
-			if isActive || isResolving {
+			if isWip || isResolving {
 				m.action = ActionCancel
 				return m, tea.Quit
 			}
@@ -340,16 +340,16 @@ func renderActionBar(a *core.AgentState) string {
 		enabled bool
 	}
 
-	isActive := a != nil && a.MergeCommit == "" && a.Resolving == ""
+	isWip := a != nil && a.MergeCommit == "" && a.Resolving == ""
 	isMerged := a != nil && a.MergeCommit != ""
 	isResolving := a != nil && a.Resolving != ""
 
 	actions := []action{
 		{"spawn", true},                              // always available
-		{"merge", isActive},                           // active agents only
+		{"merge", isWip},                              // wip agents only
 		{"accept", isMerged},                          // merged agents only
 		{"reject", isMerged || isResolving},            // merged or resolving
-		{"cancel", isActive || isResolving},            // active or resolving
+		{"cancel", isWip || isResolving},               // wip or resolving
 		{"finish", true},                              // always available
 	}
 

@@ -223,7 +223,7 @@ func AgentStatusRaw(a *core.AgentState) string {
 	if a.Resolving != "" {
 		return "● resolving"
 	}
-	return "● active"
+	return "● wip"
 }
 
 func AgentStatusStyled(a *core.AgentState, text string) string {
@@ -233,7 +233,7 @@ func AgentStatusStyled(a *core.AgentState, text string) string {
 	if a.Resolving != "" {
 		return badgeResolving.Render(text)
 	}
-	return badgeActive.Render(text)
+	return badgeWip.Render(text)
 }
 
 func AgentStatusLabel(a *core.AgentState) string {

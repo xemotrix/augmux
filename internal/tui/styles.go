@@ -20,7 +20,7 @@ var (
 			MarginBottom(1)
 
 	// Status badges
-	badgeActive    = lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
+	badgeWip       = lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
 	badgeMerged    = lipgloss.NewStyle().Bold(true).Foreground(colorCyan)
 	badgeResolving = lipgloss.NewStyle().Bold(true).Foreground(colorYellow)
 	badgeNoWindow  = lipgloss.NewStyle().Bold(true).Foreground(colorRed)
