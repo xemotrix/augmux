@@ -135,10 +135,3 @@ func AcceptAll(w io.Writer, repoRoot string) {
 		fmt.Fprintf(w, "✓ %d agent(s) accepted and cleaned up.\n", accepted)
 	}
 }
-
-func FinishAll(w io.Writer, repoRoot string) {
-	repoRoot = core.MustAbs(repoRoot)
-	MergeAll(w, repoRoot)
-	fmt.Fprintln(w)
-	AcceptAll(w, repoRoot)
-}

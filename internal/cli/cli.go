@@ -34,8 +34,6 @@ func Run() {
 		cmdReject(args[1:])
 	case "cancel":
 		cmdCancel(args[1:])
-	case "finish":
-		cmdFinish()
 	case "nuke":
 		cmdNuke()
 	case "help", "-h", "--help":
@@ -197,8 +195,6 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 			if result.AgentIdx >= 0 {
 				ops.CancelOne(&buf, repoRoot, result.AgentIdx)
 			}
-		case tui.ActionFinish:
-			ops.FinishAll(&buf, repoRoot)
 		case tui.ActionFocus:
 			if result.AgentIdx >= 0 {
 				ag, err := core.ReadAgent(repoRoot, result.AgentIdx)
@@ -209,16 +205,6 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 		}
 		return nil
 	}
-}
-
-func cmdFinish() {
-	repoRoot, err := core.FindRepoFromState()
-	if err != nil {
-		core.Fatal(err.Error())
-	}
-	fmt.Println("Finishing augmux session...")
-	fmt.Println()
-	ops.FinishAll(os.Stdout, repoRoot)
 }
 
 func cmdNuke() {
@@ -250,7 +236,6 @@ Usage:
   augmux accept --all                 Accept all merged agents
   augmux reject <id>                  Undo merge, keep agent alive to fix and re-merge
   augmux cancel <id>                  Remove agent and discard all its changes
-  augmux finish                       Merge all + accept all (one-shot cleanup)
   augmux nuke                         Force cleanup (no merge, discard all)
   augmux help                         Show this help
 
@@ -262,7 +247,6 @@ Workflow:
   5. # review changes, run tests...
   6. augmux accept 1                  # happy → clean up agent
   7. augmux reject 1                  # unhappy → undo merge, fix, re-merge
-  8. augmux finish                    # merge + accept all remaining
 
 `, version)
 }

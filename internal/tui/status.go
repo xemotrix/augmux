@@ -23,7 +23,6 @@ const (
 	ActionAccept
 	ActionReject
 	ActionCancel
-	ActionFinish
 	ActionFocus
 )
 
@@ -195,7 +194,7 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 	}
 	b.WriteString(lipgloss.JoinVertical(lipgloss.Left, rows...))
 	b.WriteString("\n\n")
-	b.WriteString(pickerHintStyle.Render("  spawn · merge · accept · reject · cancel · finish"))
+	b.WriteString(pickerHintStyle.Render("  spawn · merge · accept · reject · cancel"))
 	return b.String()
 }
 
@@ -259,7 +258,7 @@ type actionDoneMsg struct {
 	lines []string
 }
 
-// suspendActionMsg triggers a suspend-based action (merge/finish need sub-TUIs).
+// suspendActionMsg triggers a suspend-based action (merge needs sub-TUIs).
 type suspendActionMsg struct {
 	action   TUIAction
 	agentIdx int
@@ -291,12 +290,12 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.ResumeMsg:
-		// Returned from a suspended action (merge/finish)
+		// Returned from a suspended action (merge)
 		m.refreshAgents()
 		return m, nil
 
 	case suspendDoneMsg:
-		// Returned from tea.Exec-based suspended action (merge/finish)
+		// Returned from tea.Exec-based suspended action (merge)
 		m.refreshAgents()
 		return m, nil
 
@@ -418,8 +417,6 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if isWip || isResolving {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
-	case "f":
-		return m.runSuspendAction(ActionFinish, agentIdx)
 	case "enter":
 		if sel != nil {
 			return m.runInlineAction(ActionFocus, agentIdx)
@@ -456,11 +453,11 @@ func (c *suspendedActionCmd) SetStdin(io.Reader)  {}
 func (c *suspendedActionCmd) SetStdout(io.Writer) {}
 func (c *suspendedActionCmd) SetStderr(io.Writer) {}
 
-// suspendDoneMsg is sent when a suspended action (merge/finish) completes.
+// suspendDoneMsg is sent when a suspended action (merge) completes.
 type suspendDoneMsg struct{}
 
 // runSuspendAction temporarily releases the terminal for actions that need
-// sub-TUIs (merge, finish), then restores it when done.
+// sub-TUIs (merge), then restores it when done.
 func (m interactiveTUIModel) runSuspendAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
 	handler := m.actionHandler
@@ -492,7 +489,6 @@ func renderActionBar(a *core.AgentState) string {
 		{"accept", isMerged},                // merged agents only
 		{"reject", isMerged || isResolving}, // merged or resolving
 		{"cancel", isWip || isResolving},    // wip or resolving
-		{"finish", true},                    // always available
 	}
 
 	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
@@ -594,7 +590,7 @@ func (m interactiveTUIModel) View() string {
 
 // RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
 // user triggers an action. For inline actions, output is captured and displayed
-// in the TUI. For actions needing sub-TUIs (merge, finish), the TUI is
+// in the TUI. For actions needing sub-TUIs (merge), the TUI is
 // temporarily suspended.
 //
 // The actionHandler receives a TUIResult and an optional spawn name (non-empty

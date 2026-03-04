@@ -114,12 +114,9 @@ augmux cancel 1
 augmux cancel
 ```
 
-### Finishing & Nuking
+### Nuking
 
 ```bash
-# Merge all + accept all in one shot
-augmux finish
-
 # Force cleanup — discard everything without merging
 augmux nuke
 ```
@@ -149,6 +146,4 @@ augmux accept 1    # looks good
 # or
 augmux reject 1    # nope, fix and re-merge
 
-# When everything is done
-augmux finish
 ```
