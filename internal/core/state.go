@@ -47,7 +47,7 @@ type AgentState struct {
 	MergeCommit string
 	Resolving   string
 	Activity    string // "idle" or "working"
-	Window      string // tmux window name (e.g. "augmux-1")
+	Window      string // tmux window name (e.g. "ax-1-fix-auth")
 }
 
 // FindRepoRoot finds the git repo root from the current directory.

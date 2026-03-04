@@ -54,7 +54,7 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
-	winName := fmt.Sprintf("augmux-%d", idx)
+	winName := fmt.Sprintf("ax-%d-%s", idx, safe)
 	core.WriteFileContent(filepath.Join(td, "window"), winName)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
 	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",

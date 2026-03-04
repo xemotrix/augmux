@@ -16,8 +16,8 @@ func teardownOne(w io.Writer, repoRoot string, idx int) {
 		return
 	}
 
-	// Kill tmux window
-	core.TmuxRun("kill-window", "-t", fmt.Sprintf("=augmux-%d", idx))
+	// Kill tmux window (use stored window name)
+	core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 
 	// Remove worktree
 	if core.IsDir(ag.Worktree) {
@@ -80,7 +80,7 @@ func TeardownAll(w io.Writer, repoRoot string) {
 		if err != nil {
 			continue
 		}
-		core.TmuxRun("kill-window", "-t", fmt.Sprintf("=augmux-%d", idx))
+		core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 		if core.IsDir(ag.Worktree) {
 			core.GitMust(repoRoot, "worktree", "remove", "--force", ag.Worktree)
 			fmt.Fprintf(w, "    ✓ Removed worktree: %s\n", filepath.Base(ag.Worktree))
