@@ -185,10 +185,7 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 		cards = append(cards, renderAgentCard(a, repoRoot, srcBranch, "⠋"))
 	}
 
-	cols := max(termWidth/(cardWidth+1), 1)
-	if cols > len(cards) {
-		cols = len(cards)
-	}
+	cols := min(max(termWidth/(cardWidth+1), 1), len(cards))
 
 	var rows []string
 	for i := 0; i < len(cards); i += cols {
