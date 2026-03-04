@@ -382,7 +382,7 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "q", "esc", "ctrl+c":
+	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "h", "left":

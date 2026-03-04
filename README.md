@@ -58,7 +58,8 @@ augmux spawn "add tests" "update docs" "refactor api"
 
 ```bash
 augmux status            # one-shot grid view
-augmux status --watch    # live dashboard (auto-refreshes, press q to exit)
+augmux status --watch    # live dashboard (alias for 'augmux tui')
+augmux tui               # interactive dashboard (navigate, act on agents)
 ```
 
 ### Merging
@@ -102,6 +103,16 @@ When a merge has conflicts, you get three options:
 1. **Continue** — conflict markers are left in the working tree for manual resolution. After fixing, `git add`, `git commit`, then `augmux merge <id>` again.
 2. **Auto-fix with AI** — runs the configured agent CLI in non-interactive mode to resolve conflicts, keeping functionality from both sides.
 3. **Abort** — resets the working tree, agent is preserved for retry.
+
+### Cancelling
+
+```bash
+# Remove an agent and discard all its changes (no merge)
+augmux cancel 1
+
+# If there are multiple agents, shows an interactive picker
+augmux cancel
+```
 
 ### Finishing & Nuking
 
