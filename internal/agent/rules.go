@@ -22,20 +22,14 @@ in parallel using tmux windows and git worktrees.
 
 ## Activity tracking (CRITICAL)
 
-augmux tracks whether you are working or idle. You MUST set your state exactly **twice per response** using echo commands. No more, no less.
-
-**The only two valid states are ` + "`working`" + ` and ` + "`idle`" + `.** Never write any other value.
+augmux tracks whether you are working or idle.
 
 1. Your **very first tool call** in every response must be:
   ` + "`" + `echo working > {{STATE_DIR}}/activity` + "`" + `
 2. Your **very last tool call** in every response must be:
   ` + "`" + `echo idle > {{STATE_DIR}}/activity` + "`" + `
 
-**After you echo ` + "`idle`" + `, STOP. Do not make any more tool calls. Do not write any more text. Your response is over.**
-
-Do NOT cycle, loop, or alternate between states. Do NOT set ` + "`working`" + ` more than once. Do NOT set ` + "`idle`" + ` more than once. Exactly one ` + "`working`" + ` at the start, exactly one ` + "`idle`" + ` at the end.
-
-This applies to every response, including follow-ups.
+These are the only two times you should write to the activity file. After you echo ` + "`idle`" + `, your response is complete — do not make any more tool calls or write any more text.
 
 ## Important instructions
 
