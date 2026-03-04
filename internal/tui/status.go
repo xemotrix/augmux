@@ -428,7 +428,10 @@ func (m interactiveTUIModel) View() string {
 // runInteractiveTUIOnce runs one iteration of the interactive TUI and returns the result.
 func runInteractiveTUIOnce(repoRoot string) TUIResult {
 	s := spinner.New(
-		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithSpinner(spinner.Spinner{
+			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
+			FPS:    time.Second / 10,
+		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(colorYellow)),
 	)
 	m := interactiveTUIModel{repoRoot: repoRoot, width: 100, spinner: s}
