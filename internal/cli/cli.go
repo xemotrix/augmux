@@ -78,7 +78,9 @@ func cmdMerge(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		ops.MergeOne(repoRoot, idx)
+		if err := ops.MergeOne(repoRoot, idx); err != nil {
+			core.Fatal(err.Error())
+		}
 		return
 	}
 	indices := tui.RunPicker("Select agents to merge", repoRoot, func(a *core.AgentState) bool {
@@ -103,7 +105,9 @@ func cmdAccept(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		ops.AcceptOne(repoRoot, idx)
+		if err := ops.AcceptOne(repoRoot, idx); err != nil {
+			core.Fatal(err.Error())
+		}
 		return
 	}
 	indices := tui.RunPicker("Select agents to accept", repoRoot, func(a *core.AgentState) bool {
@@ -124,7 +128,9 @@ func cmdReject(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		ops.RejectOne(repoRoot, idx)
+		if err := ops.RejectOne(repoRoot, idx); err != nil {
+			core.Fatal(err.Error())
+		}
 		return
 	}
 	indices := tui.RunPicker("Select agents to reject", repoRoot, func(a *core.AgentState) bool {
