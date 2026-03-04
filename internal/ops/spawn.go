@@ -27,7 +27,7 @@ func ensureSession(repoRoot string) error {
 	return nil
 }
 
-func spawnOne(repoRoot, name, initialPrompt string, ag *agent.AgentDef) {
+func spawnOne(repoRoot, name string, ag *agent.AgentDef) {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -53,13 +53,7 @@ func spawnOne(repoRoot, name, initialPrompt string, ag *agent.AgentDef) {
 	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
 		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))
 
-	if initialPrompt != "" {
-		promptFile := filepath.Join(td, "prompt")
-		core.WriteFileContent(promptFile, initialPrompt)
-		core.TmuxRun("send-keys", "-t", winName, ag.SpawnWithPromptCmd(promptFile), "Enter")
-	} else {
-		core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmd(), "Enter")
-	}
+	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmd(), "Enter")
 
 	fmt.Printf("  ✓ Agent %d: '%s' → branch %s\n", idx, name, branchName)
 	fmt.Printf("    Window: %s\n", winName)
@@ -78,10 +72,10 @@ func Spawn(repoRoot string, args []string) {
 			fmt.Println("Empty name — aborting.")
 			return
 		}
-		spawnOne(repoRoot, name, "", ag)
+		spawnOne(repoRoot, name, ag)
 	} else {
 		for _, name := range args {
-			spawnOne(repoRoot, name, "", ag)
+			spawnOne(repoRoot, name, ag)
 		}
 	}
 	fmt.Println()

@@ -15,29 +15,26 @@ import (
 // AgentDef describes how to invoke a particular agent CLI tool.
 // To add a new agent, add an entry to the knownAgents slice below.
 type AgentDef struct {
-	ID             string // unique key, e.g. "auggie"
-	DisplayName    string // shown in picker, e.g. "Auggie (Augment Code)"
-	Command        string // binary name, e.g. "auggie"
-	PromptFileFlag string // flag to pass an instruction file, e.g. "--instruction-file"
-	InlineFlag     string // flag to pass inline prompt text, e.g. "--print"
+	ID          string // unique key, e.g. "auggie"
+	DisplayName string // shown in picker, e.g. "Auggie (Augment Code)"
+	Command     string // binary name, e.g. "auggie"
+	InlineFlag  string // flag to pass inline prompt text, e.g. "--print"
 }
 
 // knownAgents is the registry of supported agent CLIs.
 // To support a new agent, add an entry here — no other file needs to change.
 var knownAgents = []AgentDef{
 	{
-		ID:             "auggie",
-		DisplayName:    "Auggie (Augment Code)",
-		Command:        "auggie",
-		PromptFileFlag: "--instruction-file",
-		InlineFlag:     "--print",
+		ID:          "auggie",
+		DisplayName: "Auggie (Augment Code)",
+		Command:     "auggie",
+		InlineFlag:  "--print",
 	},
 	{
-		ID:             "cursor",
-		DisplayName:    "Cursor (Cursor AI)",
-		Command:        "agent",
-		PromptFileFlag: "", // Cursor takes prompt as positional arg; handled via $(cat file)
-		InlineFlag:     "-p",
+		ID:          "cursor",
+		DisplayName: "Cursor (Cursor AI)",
+		Command:     "agent",
+		InlineFlag:  "-p",
 	},
 }
 
@@ -127,20 +124,10 @@ func ActiveAgent() *AgentDef {
 
 // --- Command builders: all agent CLI coupling lives here ---
 
-// AgentSpawnCmd returns the shell command string to type into a tmux window
-// to start the agent interactively (no initial prompt).
+// SpawnCmd returns the shell command string to type into a tmux window
+// to start the agent interactively.
 func (a *AgentDef) SpawnCmd() string {
 	return a.Command
-}
-
-// SpawnWithPromptCmd returns the shell command string to start the agent
-// with an instruction file.
-func (a *AgentDef) SpawnWithPromptCmd(promptFile string) string {
-	if a.PromptFileFlag != "" {
-		return fmt.Sprintf("%s %s '%s'", a.Command, a.PromptFileFlag, promptFile)
-	}
-	// Agent takes prompt as positional arg — read file content via shell substitution
-	return fmt.Sprintf("%s \"$(cat '%s')\"", a.Command, promptFile)
 }
 
 // RunInline runs the agent synchronously with an inline prompt, attaching
