@@ -70,15 +70,22 @@ Do NOT create any new files. Only edit the conflicting files listed above.`, fil
 		err := ag.RunInline(repoRoot, promptText)
 
 		if err == nil {
-			remaining := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-			if remaining != "" {
+			// Stage all changes first — files remain "unmerged" in git's
+			// index until staged, even if the agent already removed the
+			// conflict markers from the file contents.
+			core.GitMust(repoRoot, "add", "-A")
+
+			// Check for leftover conflict markers in the staged files.
+			markers, _ := core.Git(repoRoot, "diff", "--cached", "--name-only", "-S", "<<<<<<<")
+			if markers != "" {
 				fmt.Println()
 				fmt.Printf("  ⚠ %s finished but some conflicts remain unresolved.\n", ag.Label())
 				fmt.Println("  Falling back to manual resolution.")
+				// Unstage so the user sees the unmerged state.
+				core.GitMust(repoRoot, "reset")
 				printManualInstructions(repoRoot, agentIdx)
 				return conflictContinue
 			}
-			core.GitMust(repoRoot, "add", "-A")
 			core.Git(repoRoot, "commit", "-m", mergeMsg)
 			fmt.Println()
 			fmt.Printf("  ✓ %s resolved all conflicts and committed.\n", ag.Label())
