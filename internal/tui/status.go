@@ -16,6 +16,14 @@ const (
 	textWidth = cardInner - 2 // minus padding (2); actual chars per line
 )
 
+func countUncommitted(worktree string) int {
+	out := core.GitMust(worktree, "status", "--porcelain")
+	if out == "" {
+		return 0
+	}
+	return len(strings.Split(out, "\n"))
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -85,15 +93,22 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch string, selected ..
 		ahead = "?"
 	}
 	aheadStr := ahead + " ↑"
+
+	// Count uncommitted changes in the worktree
+	dirty := countUncommitted(a.Worktree)
+	dirtyStr := fmt.Sprintf("%d ✎", dirty)
+
+	rightInfo := aheadStr + "  " + dirtyStr
 	iconWidth := 2 // branchIcon + space
-	maxBranch := textWidth - lipgloss.Width(aheadStr) - 1 - iconWidth
+	maxBranch := textWidth - lipgloss.Width(rightInfo) - 1 - iconWidth
 	branch := truncate(a.Branch, maxBranch)
-	branchGap := textWidth - lipgloss.Width(branch) - iconWidth - lipgloss.Width(aheadStr)
+	branchGap := textWidth - lipgloss.Width(branch) - iconWidth - lipgloss.Width(rightInfo)
 	if branchGap < 1 {
 		branchGap = 1
 	}
 	branchLine := bdr.Render(cV) + " " + RenderBranch(branch) +
-		strings.Repeat(" ", branchGap) + aheadStyle.Render(aheadStr) +
+		strings.Repeat(" ", branchGap) +
+		aheadStyle.Render(aheadStr) + "  " + dirtyStyle.Render(dirtyStr) +
 		" " + bdr.Render(cV)
 
 	// Bottom border

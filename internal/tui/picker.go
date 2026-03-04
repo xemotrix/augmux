@@ -10,7 +10,7 @@ import (
 
 type pickerItem struct {
 	agent    *core.AgentState
-	cols     [4]string // name, status, commits, branch
+	cols     [5]string // name, status, commits, dirty, branch
 	nameLen  int
 }
 
@@ -21,13 +21,13 @@ type pickerModel struct {
 	checked  map[int]bool
 	quitting bool
 	confirmed bool
-	colWidths [4]int
+	colWidths [5]int
 }
 
 func newPickerModel(title, repoRoot string, agents []*core.AgentState, filter func(*core.AgentState) bool) pickerModel {
 	srcBranch := core.SourceBranch(repoRoot)
 	var items []pickerItem
-	var maxW [4]int
+	var maxW [5]int
 
 	for _, a := range agents {
 		if filter != nil && !filter(a) {
@@ -37,10 +37,12 @@ func newPickerModel(title, repoRoot string, agents []*core.AgentState, filter fu
 		if ahead == "" {
 			ahead = "?"
 		}
-		cols := [4]string{
+		dirty := countUncommitted(a.Worktree)
+		cols := [5]string{
 			fmt.Sprintf("Agent %d: %s", a.Index, a.Description),
 			AgentStatusRaw(a),
 			ahead + " commits",
+			fmt.Sprintf("%d ✎", dirty),
 			a.Branch,
 		}
 		for i, c := range cols {
@@ -143,7 +145,8 @@ func (m pickerModel) View() string {
 		name := pad(item.cols[0], m.colWidths[0])
 		status := pad(item.cols[1], m.colWidths[1])
 		commits := pad(item.cols[2], m.colWidths[2])
-		branch := item.cols[3]
+		dirty := pad(item.cols[3], m.colWidths[3])
+		branch := item.cols[4]
 
 		// Apply styles
 		if isCursor {
@@ -153,10 +156,11 @@ func (m pickerModel) View() string {
 		}
 		status = AgentStatusStyled(item.agent, status)
 		commits = aheadStyle.Render(commits)
+		dirty = dirtyStyle.Render(dirty)
 		branch = RenderBranch(branch)
 
 		sep := separatorStyle.Render(" │ ")
-		b.WriteString(cursor + check + name + sep + status + sep + commits + sep + branch + "\n")
+		b.WriteString(cursor + check + name + sep + status + sep + commits + sep + dirty + sep + branch + "\n")
 	}
 
 	b.WriteString("\n")

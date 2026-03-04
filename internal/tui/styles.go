@@ -30,6 +30,7 @@ var (
 	valueStyle = lipgloss.NewStyle().Foreground(colorWhite)
 	branchStyle = lipgloss.NewStyle().Foreground(colorCyan)
 	aheadStyle = lipgloss.NewStyle().Foreground(colorYellow)
+	dirtyStyle = lipgloss.NewStyle().Foreground(colorRed)
 
 	// Agent card
 	agentCardStyle = lipgloss.NewStyle().
