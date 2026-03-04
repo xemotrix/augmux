@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/ops"
@@ -176,28 +175,15 @@ func cmdCancel(args []string) {
 	}
 }
 
-// bufferToLines converts a bytes.Buffer into a slice of output lines.
-func bufferToLines(buf *bytes.Buffer) []string {
-	output := strings.TrimRight(buf.String(), "\n")
-	if output == "" {
-		return nil
-	}
-	return strings.Split(output, "\n")
-}
-
 func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 	return func(result tui.TUIResult, spawnName string) []string {
 		var buf bytes.Buffer
 		switch result.Action {
 		case tui.ActionSpawn:
 			ops.SpawnByName(&buf, repoRoot, spawnName)
-			return bufferToLines(&buf)
 		case tui.ActionMerge:
 			if result.AgentIdx >= 0 {
-				if err := ops.MergeOne(&buf, repoRoot, result.AgentIdx, false); err != nil {
-					fmt.Fprintf(&buf, "  ⚠ %v\n", err)
-				}
-				return bufferToLines(&buf)
+				ops.MergeOne(&buf, repoRoot, result.AgentIdx, false)
 			}
 		case tui.ActionAccept:
 			if result.AgentIdx >= 0 {
@@ -213,7 +199,6 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 			}
 		case tui.ActionFinish:
 			ops.FinishAll(&buf, repoRoot)
-			return bufferToLines(&buf)
 		case tui.ActionFocus:
 			if result.AgentIdx >= 0 {
 				winName := fmt.Sprintf("augmux-%d", result.AgentIdx)
