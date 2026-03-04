@@ -48,12 +48,17 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) {
 		core.Fatal("failed to create worktree: %v", err)
 	}
 
+	// Write rules file for agents that support it.
+	rulesFile := filepath.Join(td, "rules.md")
+	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
+	core.WriteFileContent(rulesFile, rulesContent)
+
 	winName := fmt.Sprintf("augmux-%d", idx)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
 	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
 		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))
 
-	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmd(), "Enter")
+	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
 
 	fmt.Printf("  ✓ Agent %d: '%s' → branch %s\n", idx, name, branchName)
 	fmt.Printf("    Window: %s\n", winName)

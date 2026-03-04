@@ -124,12 +124,6 @@ func ActiveAgent() *AgentDef {
 
 // --- Command builders: all agent CLI coupling lives here ---
 
-// SpawnCmd returns the shell command string to type into a tmux window
-// to start the agent interactively.
-func (a *AgentDef) SpawnCmd() string {
-	return a.Command
-}
-
 // RunInline runs the agent synchronously with an inline prompt, attaching
 // stdout/stderr to the terminal. Returns any error.
 func (a *AgentDef) RunInline(dir, promptText string) error {
