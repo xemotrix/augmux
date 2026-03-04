@@ -191,6 +191,9 @@ func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int
 		fmt.Println("No matching agents found.")
 		return nil
 	}
+	if len(m.items) == 1 {
+		return []int{m.items[0].agent.Index}
+	}
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {

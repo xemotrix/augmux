@@ -75,6 +75,9 @@ func (m menuModel) View() string {
 
 // RunMenu shows a single-select menu and returns the chosen index, or -1 if cancelled.
 func RunMenu(title string, options []string) int {
+	if len(options) == 1 {
+		return 0
+	}
 	m := newMenuModel(title, options)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
