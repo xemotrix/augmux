@@ -71,14 +71,14 @@ func activityRawStr(a *core.AgentState) string {
 	if a.Activity == core.ActivityWorking {
 		return "⠋ working"
 	}
-	return "ᶻᶻᶻ idle"
+	return "○ idle"
 }
 
 func activityIndicator(a *core.AgentState, spinnerFrame string) string {
 	if a.Activity == core.ActivityWorking {
 		return lipgloss.NewStyle().Foreground(colorYellow).Render(spinnerFrame + " working")
 	}
-	return lipgloss.NewStyle().Foreground(colorDimGray).Render("ᶻᶻᶻ idle")
+	return lipgloss.NewStyle().Foreground(colorDimGray).Render("○ idle")
 }
 
 func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame string, selected ...bool) string {
