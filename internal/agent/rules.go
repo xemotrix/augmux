@@ -20,18 +20,22 @@ in parallel using tmux windows and git worktrees.
 - **Worktree path:** ` + "`{{WORKTREE}}`" + `
 - **Source branch:** ` + "`{{SOURCE_BRANCH}}`" + ` (the branch your work will be merged back into)
 
-## Activity tracking (CRITICAL — read carefully)
+## Activity tracking (CRITICAL)
 
-augmux tracks your activity state. You **MUST** follow these rules **on EVERY single message you receive**, not just the first one:
+augmux tracks whether you are working or idle. You MUST set your state exactly **twice per response** using echo commands. No more, no less.
 
-1. **IMMEDIATELY at the start of EVERY response**, before doing anything else, set your state to working:
+**The only two valid states are ` + "`working`" + ` and ` + "`idle`" + `.** Never write any other value.
+
+1. Your **very first tool call** in every response must be:
   ` + "`" + `echo working > {{STATE_DIR}}/activity` + "`" + `
-2. **At the END of EVERY response**, when you have finished all work for that message, set your state back to idle:
+2. Your **very last tool call** in every response must be:
   ` + "`" + `echo idle > {{STATE_DIR}}/activity` + "`" + `
 
-**This applies to EVERY prompt you receive — not just the first one.**
-If you receive a follow-up message, you MUST set working again at the start and idle again at the end.
-The orchestrator UI relies on this to show your current status. If you forget, the UI will show stale state and the user will not know what you are doing.
+**After you echo ` + "`idle`" + `, STOP. Do not make any more tool calls. Do not write any more text. Your response is over.**
+
+Do NOT cycle, loop, or alternate between states. Do NOT set ` + "`working`" + ` more than once. Do NOT set ` + "`idle`" + ` more than once. Exactly one ` + "`working`" + ` at the start, exactly one ` + "`idle`" + ` at the end.
+
+This applies to every response, including follow-ups.
 
 ## Important instructions
 
