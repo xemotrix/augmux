@@ -1,8 +1,12 @@
-package main
+package ops
 
 import (
 	"fmt"
 	"strings"
+
+	"github.com/xemotrix/augmux/internal/agent"
+	"github.com/xemotrix/augmux/internal/core"
+	"github.com/xemotrix/augmux/internal/tui"
 )
 
 type conflictResult int
@@ -14,13 +18,13 @@ const (
 )
 
 func handleConflict(repoRoot, task, mergeMsg string, agentIdx int) conflictResult {
-	agent := activeAgent()
+	ag := agent.ActiveAgent()
 	fmt.Println()
 	fmt.Printf("  ✗ CONFLICT detected while merging '%s'\n", task)
 	fmt.Println()
 
 	fmt.Println("  Conflicting files:")
-	files := gitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
+	files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
 	for _, f := range strings.Split(files, "\n") {
 		if f != "" {
 			fmt.Printf("    %s\n", f)
@@ -28,9 +32,9 @@ func handleConflict(repoRoot, task, mergeMsg string, agentIdx int) conflictResul
 	}
 	fmt.Println()
 
-	choice := runMenu("How do you want to resolve?", []string{
+	choice := tui.RunMenu("How do you want to resolve?", []string{
 		"Continue — leave conflicts in working tree, resolve manually",
-		fmt.Sprintf("Auto-fix with %s — AI resolves conflicts keeping both sides", agent.Label()),
+		fmt.Sprintf("Auto-fix with %s — AI resolves conflicts keeping both sides", ag.Label()),
 		"Abort — discard merge and reset",
 	})
 
@@ -46,7 +50,7 @@ func handleConflict(repoRoot, task, mergeMsg string, agentIdx int) conflictResul
 
 	case 1:
 		fmt.Println()
-		fmt.Printf("  🤖 Running %s to auto-fix conflicts...\n", agent.Label())
+		fmt.Printf("  🤖 Running %s to auto-fix conflicts...\n", ag.Label())
 		fmt.Println()
 
 		promptText := fmt.Sprintf(`There are merge conflicts in the following files:
@@ -63,31 +67,31 @@ Your task:
 
 Do NOT create any new files. Only edit the conflicting files listed above.`, files)
 
-		err := agent.RunInline(repoRoot, promptText)
+		err := ag.RunInline(repoRoot, promptText)
 
 		if err == nil {
-			remaining := gitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
+			remaining := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
 			if remaining != "" {
 				fmt.Println()
-				fmt.Printf("  ⚠ %s finished but some conflicts remain unresolved.\n", agent.Label())
+				fmt.Printf("  ⚠ %s finished but some conflicts remain unresolved.\n", ag.Label())
 				fmt.Println("  Falling back to manual resolution.")
 				printManualInstructions(repoRoot, agentIdx)
 				return conflictContinue
 			}
-			gitMust(repoRoot, "add", "-A")
-			git(repoRoot, "commit", "-m", mergeMsg)
+			core.GitMust(repoRoot, "add", "-A")
+			core.Git(repoRoot, "commit", "-m", mergeMsg)
 			fmt.Println()
-			fmt.Printf("  ✓ %s resolved all conflicts and committed.\n", agent.Label())
+			fmt.Printf("  ✓ %s resolved all conflicts and committed.\n", ag.Label())
 			return conflictAutoFixed
 		}
 
 		fmt.Println()
-		fmt.Printf("  ⚠ %s failed. Falling back to manual resolution.\n", agent.Label())
+		fmt.Printf("  ⚠ %s failed. Falling back to manual resolution.\n", ag.Label())
 		printManualInstructions(repoRoot, agentIdx)
 		return conflictContinue
 
 	default:
-		gitMust(repoRoot, "reset", "--hard", "HEAD")
+		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
 		fmt.Println("  ⊘ Merge aborted.")
 		return conflictAbort
 	}

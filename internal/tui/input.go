@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"fmt"
@@ -62,8 +62,8 @@ func (m inputModel) View() string {
 	return b.String()
 }
 
-// runTextInput shows a text input prompt and returns the entered value, or "" if cancelled.
-func runTextInput(prompt string) string {
+// RunTextInput shows a text input prompt and returns the entered value, or "" if cancelled.
+func RunTextInput(prompt string) string {
 	m := newInputModel(prompt)
 	p := tea.NewProgram(m)
 	final, err := p.Run()

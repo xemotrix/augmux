@@ -1,14 +1,15 @@
-package main
+package tui
 
 import (
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/xemotrix/augmux/internal/core"
 )
 
 type pickerItem struct {
-	agent    *AgentState
+	agent    *core.AgentState
 	cols     [4]string // name, status, commits, branch
 	nameLen  int
 }
@@ -23,8 +24,8 @@ type pickerModel struct {
 	colWidths [4]int
 }
 
-func newPickerModel(title, repoRoot string, agents []*AgentState, filter func(*AgentState) bool) pickerModel {
-	srcBranch := sourceBranch(repoRoot)
+func newPickerModel(title, repoRoot string, agents []*core.AgentState, filter func(*core.AgentState) bool) pickerModel {
+	srcBranch := core.SourceBranch(repoRoot)
 	var items []pickerItem
 	var maxW [4]int
 
@@ -32,13 +33,13 @@ func newPickerModel(title, repoRoot string, agents []*AgentState, filter func(*A
 		if filter != nil && !filter(a) {
 			continue
 		}
-		ahead := gitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
+		ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 		if ahead == "" {
 			ahead = "?"
 		}
 		cols := [4]string{
 			fmt.Sprintf("Agent %d: %s", a.Index, a.Description),
-			agentStatusRaw(a),
+			AgentStatusRaw(a),
 			ahead + " commits",
 			a.Branch,
 		}
@@ -150,9 +151,9 @@ func (m pickerModel) View() string {
 		} else {
 			name = pickerNormalStyle.Render(name)
 		}
-		status = agentStatusStyled(item.agent, status)
+		status = AgentStatusStyled(item.agent, status)
 		commits = aheadStyle.Render(commits)
-		branch = renderBranch(branch)
+		branch = RenderBranch(branch)
 
 		sep := separatorStyle.Render(" │ ")
 		b.WriteString(cursor + check + name + sep + status + sep + commits + sep + branch + "\n")
@@ -171,16 +172,16 @@ func pad(s string, width int) string {
 	return s + strings.Repeat(" ", width-len(s))
 }
 
-// runPicker shows a multi-select picker and returns selected agent indices (nil if cancelled).
-func runPicker(title, repoRoot string, filter func(*AgentState) bool) []int {
-	agents := listAgents(repoRoot)
+// RunPicker shows a multi-select picker and returns selected agent indices (nil if cancelled).
+func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int {
+	agents := core.ListAgents(repoRoot)
 	if len(agents) == 0 {
 		fmt.Println("No agents found.")
 		return nil
 	}
-	var states []*AgentState
+	var states []*core.AgentState
 	for _, idx := range agents {
-		a, err := readAgent(repoRoot, idx)
+		a, err := core.ReadAgent(repoRoot, idx)
 		if err == nil {
 			states = append(states, a)
 		}
@@ -193,7 +194,7 @@ func runPicker(title, repoRoot string, filter func(*AgentState) bool) []int {
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
-		fatal("TUI error: %v", err)
+		core.Fatal("TUI error: %v", err)
 	}
 	fm := final.(pickerModel)
 	if !fm.confirmed {
@@ -208,7 +209,7 @@ func runPicker(title, repoRoot string, filter func(*AgentState) bool) []int {
 	return result
 }
 
-func agentStatusRaw(a *AgentState) string {
+func AgentStatusRaw(a *core.AgentState) string {
 	if a.MergeCommit != "" {
 		return "● merged"
 	}
@@ -218,7 +219,7 @@ func agentStatusRaw(a *AgentState) string {
 	return "● active"
 }
 
-func agentStatusStyled(a *AgentState, text string) string {
+func AgentStatusStyled(a *core.AgentState, text string) string {
 	if a.MergeCommit != "" {
 		return badgeMerged.Render(text)
 	}
@@ -228,6 +229,6 @@ func agentStatusStyled(a *AgentState, text string) string {
 	return badgeActive.Render(text)
 }
 
-func agentStatusLabel(a *AgentState) string {
-	return agentStatusStyled(a, agentStatusRaw(a))
+func AgentStatusLabel(a *core.AgentState) string {
+	return AgentStatusStyled(a, AgentStatusRaw(a))
 }

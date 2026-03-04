@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"encoding/json"
@@ -7,6 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/xemotrix/augmux/internal/core"
+	"github.com/xemotrix/augmux/internal/tui"
 )
 
 // AgentDef describes how to invoke a particular agent CLI tool.
@@ -47,7 +50,7 @@ type agentConfig struct {
 func configPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fatal("cannot determine home directory: %v", err)
+		core.Fatal("cannot determine home directory: %v", err)
 	}
 	return filepath.Join(home, ".config", "augmux", "config.json")
 }
@@ -96,22 +99,22 @@ func promptAgentSetup() *AgentDef {
 	}
 
 	title := fmt.Sprintf("No agent CLI configured — select one:\n(config will be saved to %s)", configPath())
-	choice := runMenu(title, options)
+	choice := tui.RunMenu(title, options)
 	if choice < 0 || choice >= len(knownAgents) {
-		fatal("No agent selected.")
+		core.Fatal("No agent selected.")
 	}
 
 	agent := &knownAgents[choice]
 	if err := saveConfig(&agentConfig{Agent: agent.ID}); err != nil {
-		fatal("Failed to save config: %v", err)
+		core.Fatal("Failed to save config: %v", err)
 	}
 	fmt.Printf("\n  ✓ Configured to use %s (%s)\n", agent.DisplayName, agent.Command)
 	fmt.Printf("    Config saved to %s\n\n", configPath())
 	return agent
 }
 
-// activeAgent returns the configured agent, prompting for setup if needed.
-func activeAgent() *AgentDef {
+// ActiveAgent returns the configured agent, prompting for setup if needed.
+func ActiveAgent() *AgentDef {
 	cfg := loadConfig()
 	if cfg != nil {
 		if a := findAgent(cfg.Agent); a != nil {

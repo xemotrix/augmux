@@ -1,37 +1,40 @@
-package main
+package ops
 
 import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/xemotrix/augmux/internal/core"
+	"github.com/xemotrix/augmux/internal/tui"
 )
 
-func mergeOne(repoRoot string, idx int) error {
-	repoRoot = mustAbs(repoRoot)
-	td := taskDir(repoRoot, idx)
+func MergeOne(repoRoot string, idx int) error {
+	repoRoot = core.MustAbs(repoRoot)
+	td := core.TaskDir(repoRoot, idx)
 
-	agent, err := readAgent(repoRoot, idx)
+	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
 		return err
 	}
 
 	// Already merged?
-	if agent.MergeCommit != "" {
-		fmt.Printf("Agent %d is already merged (commit %s).\n", idx, agent.MergeCommit)
+	if ag.MergeCommit != "" {
+		fmt.Printf("Agent %d is already merged (commit %s).\n", idx, ag.MergeCommit)
 		fmt.Printf("Use 'augmux accept %d' to finalize, or 'augmux reject %d' to undo and retry.\n", idx, idx)
 		return fmt.Errorf("already merged")
 	}
 
-	srcBranch := sourceBranch(repoRoot)
+	srcBranch := core.SourceBranch(repoRoot)
 
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("Agent %d: %s\n", idx, agent.Description)
-	fmt.Printf("Branch:   %s\n", agent.Branch)
+	fmt.Printf("Agent %d: %s\n", idx, ag.Description)
+	fmt.Printf("Branch:   %s\n", ag.Branch)
 
 	// Check resolving state (user came back after fixing conflicts)
-	if agent.Resolving != "" {
-		unmerged := gitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-		porcelain := gitMust(repoRoot, "status", "--porcelain")
+	if ag.Resolving != "" {
+		unmerged := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
+		porcelain := core.GitMust(repoRoot, "status", "--porcelain")
 		if unmerged != "" || porcelain != "" {
 			fmt.Println()
 			fmt.Printf("  ⚠ Conflicts still unresolved or uncommitted changes in: %s\n", repoRoot)
@@ -39,8 +42,8 @@ func mergeOne(repoRoot string, idx int) error {
 			fmt.Printf("    augmux merge %d\n", idx)
 			return fmt.Errorf("still resolving")
 		}
-		sha := gitMust(repoRoot, "rev-parse", "HEAD")
-		writeFileContent(td+"/merge_commit", sha)
+		sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
+		core.WriteFileContent(td+"/merge_commit", sha)
 		os.Remove(td + "/resolving")
 		fmt.Println("  ✓ Conflicts resolved and merged.")
 		fmt.Println()
@@ -49,22 +52,22 @@ func mergeOne(repoRoot string, idx int) error {
 	}
 
 	// Check uncommitted changes in worktree
-	if isDir(agent.Worktree) {
-		porcelain := gitMust(agent.Worktree, "status", "--porcelain")
+	if core.IsDir(ag.Worktree) {
+		porcelain := core.GitMust(ag.Worktree, "status", "--porcelain")
 		if porcelain != "" {
 			fmt.Println()
 			fmt.Println("  ⚠ Uncommitted changes in worktree:")
-			for _, line := range strings.Split(gitMust(agent.Worktree, "status", "--short"), "\n") {
+			for _, line := range strings.Split(core.GitMust(ag.Worktree, "status", "--short"), "\n") {
 				fmt.Printf("    %s\n", line)
 			}
 			fmt.Println()
-			choice := runMenu("Uncommitted changes — cannot merge", []string{
+			choice := tui.RunMenu("Uncommitted changes — cannot merge", []string{
 				"Commit them now with a default message",
 				"Abort merge for this agent",
 			})
 			if choice == 0 {
-				gitMust(agent.Worktree, "add", "-A")
-				gitMust(agent.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
+				core.GitMust(ag.Worktree, "add", "-A")
+				core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
 				fmt.Println("  ✓ Changes committed.")
 			} else {
 				fmt.Printf("  ⊘ Merge aborted for agent %d. Worktree preserved.\n", idx)
@@ -75,10 +78,10 @@ func mergeOne(repoRoot string, idx int) error {
 	}
 
 	// Checkout source branch
-	git(repoRoot, "checkout", srcBranch)
+	core.Git(repoRoot, "checkout", srcBranch)
 
 	// Count ahead
-	ahead := gitMust(repoRoot, "rev-list", "--count", srcBranch+".."+agent.Branch)
+	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
 	if ahead == "0" || ahead == "" {
 		fmt.Println("  ⊘ No changes to merge.")
 		teardownOne(repoRoot, idx)
@@ -88,21 +91,21 @@ func mergeOne(repoRoot string, idx int) error {
 	fmt.Printf("  %s commit(s) to merge.\n", ahead)
 	fmt.Println()
 	fmt.Println("  Changes summary:")
-	for _, line := range strings.Split(gitMust(repoRoot, "diff", "--stat", srcBranch+".."+agent.Branch), "\n") {
+	for _, line := range strings.Split(core.GitMust(repoRoot, "diff", "--stat", srcBranch+".."+ag.Branch), "\n") {
 		fmt.Printf("    %s\n", line)
 	}
 	fmt.Println()
 
 	// Merge message
-	lastMsg := gitMust(repoRoot, "log", "-1", "--format=%s", agent.Branch)
+	lastMsg := core.GitMust(repoRoot, "log", "-1", "--format=%s", ag.Branch)
 	mergeMsg := "augmux: " + lastMsg
 
 	// Try squash merge + commit
-	_, mergeErr := git(repoRoot, "merge", "--squash", agent.Branch)
+	_, mergeErr := core.Git(repoRoot, "merge", "--squash", ag.Branch)
 	if mergeErr == nil {
-		if _, commitErr := git(repoRoot, "commit", "-m", mergeMsg); commitErr == nil {
-			sha := gitMust(repoRoot, "rev-parse", "HEAD")
-			writeFileContent(td+"/merge_commit", sha)
+		if _, commitErr := core.Git(repoRoot, "commit", "-m", mergeMsg); commitErr == nil {
+			sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
+			core.WriteFileContent(td+"/merge_commit", sha)
 			fmt.Println("  ✓ Merged successfully (squashed).")
 			fmt.Println()
 			printAcceptRejectHint(idx)
@@ -111,14 +114,14 @@ func mergeOne(repoRoot string, idx int) error {
 	}
 
 	// Conflict path
-	result := handleConflict(repoRoot, agent.Description, mergeMsg, idx)
+	result := handleConflict(repoRoot, ag.Description, mergeMsg, idx)
 	switch result {
 	case conflictContinue:
-		writeFileContent(td+"/resolving", mergeMsg)
+		core.WriteFileContent(td+"/resolving", mergeMsg)
 		return fmt.Errorf("resolving conflicts")
 	case conflictAutoFixed:
-		sha := gitMust(repoRoot, "rev-parse", "HEAD")
-		writeFileContent(td+"/merge_commit", sha)
+		sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
+		core.WriteFileContent(td+"/merge_commit", sha)
 		fmt.Println()
 		printAcceptRejectHint(idx)
 		return nil

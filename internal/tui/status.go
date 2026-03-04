@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/xemotrix/augmux/internal/core"
 )
 
 const (
@@ -25,7 +26,7 @@ func truncate(s string, n int) string {
 	return s[:n-3] + "..."
 }
 
-func agentBorderColor(a *AgentState) lipgloss.TerminalColor {
+func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
 		return colorCyan
 	}
@@ -35,9 +36,9 @@ func agentBorderColor(a *AgentState) lipgloss.TerminalColor {
 	return colorGreen
 }
 
-func renderAgentCard(a *AgentState, repoRoot, srcBranch string) string {
-	statusRaw := agentStatusRaw(a)
-	statusStyled := agentStatusStyled(a, statusRaw)
+func renderAgentCard(a *core.AgentState, repoRoot, srcBranch string) string {
+	statusRaw := AgentStatusRaw(a)
+	statusStyled := AgentStatusStyled(a, statusRaw)
 
 	idStr := fmt.Sprintf("Agent %d", a.Index)
 	gap := textWidth - len(idStr) - len(statusRaw)
@@ -50,7 +51,7 @@ func renderAgentCard(a *AgentState, repoRoot, srcBranch string) string {
 	name := truncate(a.Description, textWidth)
 	nameLine := valueStyle.Render(name)
 
-	ahead := gitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
+	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 	if ahead == "" {
 		ahead = "?"
 	}
@@ -61,7 +62,7 @@ func renderAgentCard(a *AgentState, repoRoot, srcBranch string) string {
 	if branchGap < 1 {
 		branchGap = 1
 	}
-	branchLine := renderBranch(branch) + strings.Repeat(" ", branchGap) + aheadStyle.Render(aheadStr)
+	branchLine := RenderBranch(branch) + strings.Repeat(" ", branchGap) + aheadStyle.Render(aheadStr)
 
 	content := header + "\n" + nameLine + "\n" + branchLine
 	style := lipgloss.NewStyle().
@@ -72,17 +73,17 @@ func renderAgentCard(a *AgentState, repoRoot, srcBranch string) string {
 	return style.Render(content)
 }
 
-func renderStatusView(repoRoot string, termWidth int) string {
-	srcBranch := sourceBranch(repoRoot)
+func RenderStatusView(repoRoot string, termWidth int) string {
+	srcBranch := core.SourceBranch(repoRoot)
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("⚡ augmux session"))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
 		headerKeyStyle.Render("Repo:"), headerValStyle.Render(repoRoot),
-		headerKeyStyle.Render("Source:"), renderBranch(srcBranch)))
+		headerKeyStyle.Render("Source:"), RenderBranch(srcBranch)))
 
-	agents := listAgents(repoRoot)
+	agents := core.ListAgents(repoRoot)
 	if len(agents) == 0 {
 		b.WriteString(labelStyle.Render("  No agents running.\n"))
 		return b.String()
@@ -90,7 +91,7 @@ func renderStatusView(repoRoot string, termWidth int) string {
 
 	var cards []string
 	for _, idx := range agents {
-		a, err := readAgent(repoRoot, idx)
+		a, err := core.ReadAgent(repoRoot, idx)
 		if err != nil {
 			continue
 		}
@@ -143,9 +144,9 @@ func (m statusWatchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
-		m.content = renderStatusView(m.repoRoot, m.width)
+		m.content = RenderStatusView(m.repoRoot, m.width)
 	case tickMsg:
-		m.content = renderStatusView(m.repoRoot, m.width)
+		m.content = RenderStatusView(m.repoRoot, m.width)
 		return m, tickEvery(2 * time.Second)
 	case tea.KeyMsg:
 		if msg.String() == "q" || msg.String() == "esc" || msg.String() == "ctrl+c" {
@@ -163,10 +164,10 @@ func (m statusWatchModel) View() string {
 	return m.content + "\n\n" + pickerHintStyle.Render("  q quit · auto-refreshes every 2s") + "\n"
 }
 
-func runStatusWatch(repoRoot string) {
+func RunStatusWatch(repoRoot string) {
 	m := statusWatchModel{repoRoot: repoRoot, width: 100}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
-		fatal("TUI error: %v", err)
+		core.Fatal("TUI error: %v", err)
 	}
 }

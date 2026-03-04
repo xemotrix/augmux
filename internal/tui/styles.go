@@ -1,4 +1,4 @@
-package main
+package tui
 
 import "github.com/charmbracelet/lipgloss"
 
@@ -55,7 +55,7 @@ var (
 
 const branchIcon = "\uf126" // Nerd Font code-fork icon
 
-// renderBranch renders a branch name with the branch icon prefix.
-func renderBranch(name string) string {
+// RenderBranch renders a branch name with the branch icon prefix.
+func RenderBranch(name string) string {
 	return branchStyle.Render(branchIcon + " " + name)
 }

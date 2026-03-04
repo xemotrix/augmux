@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"fmt"
@@ -86,8 +86,8 @@ func (m confirmModel) View() string {
 	return b.String()
 }
 
-// runConfirm shows a yes/no confirmation dialog. Returns true if confirmed.
-func runConfirm(message string) bool {
+// RunConfirm shows a yes/no confirmation dialog. Returns true if confirmed.
+func RunConfirm(message string) bool {
 	m := confirmModel{message: message, yesSelected: false}
 	p := tea.NewProgram(m)
 	final, err := p.Run()

@@ -61,8 +61,6 @@ augmux status            # one-shot grid view
 augmux status --watch    # live dashboard (auto-refreshes, press q to exit)
 ```
 
-Shows all agents as compact cards in a grid layout with their state (`active`, `merged`, `resolving conflicts`, `no window`), branch, and commit count.
-
 ### Merging
 
 Merge uses a two-phase flow: **merge → review → accept/reject**.
@@ -135,25 +133,4 @@ augmux reject 1    # nope, fix and re-merge
 
 # When everything is done
 augmux finish
-```
-
-## Project Structure
-
-```
-main.go         — CLI entry point and command dispatch
-agent.go        — agent CLI registry (auggie, cursor) and config management
-exec.go         — shell command helpers (git, tmux)
-state.go        — agent state management and file I/O
-spawn.go        — agent spawning (worktrees, tmux windows)
-merge.go        — squash merge logic
-conflict.go     — conflict resolution (manual, AI auto-fix, abort)
-accept.go       — accept, reject, merge-all, accept-all, finish
-teardown.go     — agent and session teardown
-status.go       — status command entry point
-tui_status.go   — grid-based status dashboard and --watch mode
-tui_picker.go   — multi-select interactive picker (merge, accept, cancel)
-tui_menu.go     — single-select menu for prompts
-tui_input.go    — text input prompt
-tui_confirm.go  — confirmation prompt
-tui_styles.go   — shared lipgloss styles and icons
 ```

@@ -1,41 +1,43 @@
-package main
+package ops
 
 import (
 	"fmt"
 	"os"
+
+	"github.com/xemotrix/augmux/internal/core"
 )
 
-func acceptOne(repoRoot string, idx int) error {
-	repoRoot = mustAbs(repoRoot)
-	agent, err := readAgent(repoRoot, idx)
+func AcceptOne(repoRoot string, idx int) error {
+	repoRoot = core.MustAbs(repoRoot)
+	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
 		return err
 	}
-	if agent.MergeCommit == "" {
+	if ag.MergeCommit == "" {
 		return fmt.Errorf("agent %d has not been merged yet. Run 'augmux merge %d' first", idx, idx)
 	}
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("Accepting agent %d: %s\n", idx, agent.Description)
+	fmt.Printf("Accepting agent %d: %s\n", idx, ag.Description)
 	teardownOne(repoRoot, idx)
 	fmt.Printf("  ✓ Agent %d accepted and cleaned up.\n", idx)
 	return nil
 }
 
-func rejectOne(repoRoot string, idx int) error {
-	repoRoot = mustAbs(repoRoot)
-	td := taskDir(repoRoot, idx)
+func RejectOne(repoRoot string, idx int) error {
+	repoRoot = core.MustAbs(repoRoot)
+	td := core.TaskDir(repoRoot, idx)
 
-	agent, err := readAgent(repoRoot, idx)
+	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("Rejecting agent %d: %s\n", idx, agent.Description)
+	fmt.Printf("Rejecting agent %d: %s\n", idx, ag.Description)
 
 	// Case 1: conflicts are being resolved
-	if agent.Resolving != "" {
-		gitMust(repoRoot, "reset", "--hard", "HEAD")
+	if ag.Resolving != "" {
+		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
 		os.Remove(td + "/resolving")
 		fmt.Printf("  ✓ Conflict resolution aborted. Agent %d is still active.\n", idx)
 		fmt.Println()
@@ -45,22 +47,22 @@ func rejectOne(repoRoot string, idx int) error {
 	}
 
 	// Case 2: merge was completed
-	if agent.MergeCommit == "" {
+	if ag.MergeCommit == "" {
 		return fmt.Errorf("agent %d has not been merged yet. Nothing to reject", idx)
 	}
 
-	currentHead := gitMust(repoRoot, "rev-parse", "HEAD")
-	if currentHead != agent.MergeCommit {
+	currentHead := core.GitMust(repoRoot, "rev-parse", "HEAD")
+	if currentHead != ag.MergeCommit {
 		fmt.Println()
-		fmt.Printf("  ⚠ WARNING: HEAD (%s) is not the merge commit (%s).\n", currentHead, agent.MergeCommit)
+		fmt.Printf("  ⚠ WARNING: HEAD (%s) is not the merge commit (%s).\n", currentHead, ag.MergeCommit)
 		fmt.Println("  Other commits have been made since this merge.")
 		fmt.Println("  Cannot safely reset — aborting reject.")
 		fmt.Println()
-		fmt.Printf("  You may need to manually revert: git revert %s\n", agent.MergeCommit)
+		fmt.Printf("  You may need to manually revert: git revert %s\n", ag.MergeCommit)
 		return fmt.Errorf("cannot safely reset")
 	}
 
-	gitMust(repoRoot, "reset", "--hard", "HEAD~1")
+	core.GitMust(repoRoot, "reset", "--hard", "HEAD~1")
 	os.Remove(td + "/merge_commit")
 
 	fmt.Printf("  ✓ Merge undone. Agent %d is still active.\n", idx)
@@ -70,28 +72,28 @@ func rejectOne(repoRoot string, idx int) error {
 	return nil
 }
 
-func mergeAll(repoRoot string) {
-	repoRoot = mustAbs(repoRoot)
-	if !isDir(stateDir(repoRoot)) {
-		fatal("No augmux session found.")
+func MergeAll(repoRoot string) {
+	repoRoot = core.MustAbs(repoRoot)
+	if !core.IsDir(core.StateDir(repoRoot)) {
+		core.Fatal("No augmux session found.")
 	}
 
-	srcBranch := sourceBranch(repoRoot)
+	srcBranch := core.SourceBranch(repoRoot)
 	fmt.Printf("Merging all agent branches into '%s'...\n\n", srcBranch)
 
-	for _, idx := range listAgents(repoRoot) {
-		mergeOne(repoRoot, idx)
+	for _, idx := range core.ListAgents(repoRoot) {
+		MergeOne(repoRoot, idx)
 		fmt.Println()
 	}
 
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	merged, unmerged := 0, 0
-	for _, idx := range listAgents(repoRoot) {
-		agent, err := readAgent(repoRoot, idx)
+	for _, idx := range core.ListAgents(repoRoot) {
+		ag, err := core.ReadAgent(repoRoot, idx)
 		if err != nil {
 			continue
 		}
-		if agent.MergeCommit != "" {
+		if ag.MergeCommit != "" {
 			merged++
 		} else {
 			unmerged++
@@ -109,20 +111,20 @@ func mergeAll(repoRoot string) {
 	}
 }
 
-func acceptAll(repoRoot string) {
-	repoRoot = mustAbs(repoRoot)
-	if !isDir(stateDir(repoRoot)) {
-		fatal("No augmux session found.")
+func AcceptAll(repoRoot string) {
+	repoRoot = core.MustAbs(repoRoot)
+	if !core.IsDir(core.StateDir(repoRoot)) {
+		core.Fatal("No augmux session found.")
 	}
 	fmt.Println("Accepting all merged agents...")
 	fmt.Println()
 	accepted := 0
-	for _, idx := range listAgents(repoRoot) {
-		agent, err := readAgent(repoRoot, idx)
-		if err != nil || agent.MergeCommit == "" {
+	for _, idx := range core.ListAgents(repoRoot) {
+		ag, err := core.ReadAgent(repoRoot, idx)
+		if err != nil || ag.MergeCommit == "" {
 			continue
 		}
-		acceptOne(repoRoot, idx)
+		AcceptOne(repoRoot, idx)
 		accepted++
 		fmt.Println()
 	}
@@ -133,9 +135,9 @@ func acceptAll(repoRoot string) {
 	}
 }
 
-func finishAll(repoRoot string) {
-	repoRoot = mustAbs(repoRoot)
-	mergeAll(repoRoot)
+func FinishAll(repoRoot string) {
+	repoRoot = core.MustAbs(repoRoot)
+	MergeAll(repoRoot)
 	fmt.Println()
-	acceptAll(repoRoot)
+	AcceptAll(repoRoot)
 }

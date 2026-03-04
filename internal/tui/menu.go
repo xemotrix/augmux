@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"fmt"
@@ -73,8 +73,8 @@ func (m menuModel) View() string {
 	return b.String()
 }
 
-// runMenu shows a single-select menu and returns the chosen index, or -1 if cancelled.
-func runMenu(title string, options []string) int {
+// RunMenu shows a single-select menu and returns the chosen index, or -1 if cancelled.
+func RunMenu(title string, options []string) int {
 	m := newMenuModel(title, options)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
