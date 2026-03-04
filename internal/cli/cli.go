@@ -25,7 +25,7 @@ func Run() {
 	case "tui":
 		cmdTUI()
 	case "status":
-		cmdStatus(args[1:])
+		cmdStatus()
 	case "merge":
 		cmdMerge(args[1:])
 	case "accept":
@@ -65,16 +65,12 @@ func cmdTUI() {
 	tui.RunInteractiveTUI(repoRoot, tuiActionHandler(repoRoot))
 }
 
-func cmdStatus(args []string) {
+func cmdStatus() {
 	repoRoot, err := core.FindRepoFromState()
 	if err != nil {
 		core.Fatal(err.Error())
 	}
-	if len(args) > 0 && (args[0] == "--watch" || args[0] == "-w") {
-		tui.RunInteractiveTUI(repoRoot, tuiActionHandler(repoRoot))
-		return
-	}
-	fmt.Println(tui.RenderStatusView(repoRoot, 120))
+	tui.RunInteractiveTUI(repoRoot, tuiActionHandler(repoRoot))
 }
 
 func cmdMerge(args []string) {
