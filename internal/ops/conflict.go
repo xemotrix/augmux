@@ -113,3 +113,66 @@ func printManualInstructions(w io.Writer, repoRoot string, agentIdx int) {
 	fmt.Fprintln(w, "    3. git commit")
 	fmt.Fprintf(w, "    4. augmux merge %d\n", agentIdx)
 }
+
+// ResolveConflict handles a conflict resolution choice from the TUI.
+// choice: 0 = continue (manual), 1 = auto-fix with AI, anything else = abort.
+func ResolveConflict(w io.Writer, info *MergeConflictErr, choice int) {
+	td := core.TaskDir(info.RepoRoot, info.AgentIdx)
+
+	switch choice {
+	case 0:
+		// Continue — leave conflicts for manual resolution
+		fmt.Fprintln(w, "  Conflicts left in working tree. To resolve:")
+		fmt.Fprintf(w, "    1. Edit the conflicting files in: %s\n", info.RepoRoot)
+		fmt.Fprintln(w, "    2. git add <resolved files>")
+		fmt.Fprintln(w, "    3. git commit")
+		fmt.Fprintf(w, "    4. augmux merge %d\n", info.AgentIdx)
+		core.WriteFileContent(td+"/resolving", info.MergeMsg)
+
+	case 1:
+		// Auto-fix with AI
+		ag := agent.ActiveAgent()
+		fmt.Fprintf(w, "  🤖 Running %s to auto-fix conflicts...\n", ag.Label())
+
+		promptText := fmt.Sprintf(`There are merge conflicts in the following files:
+
+%s
+
+Each file contains git conflict markers (<<<<<<< HEAD, =======, >>>>>>> ...).
+
+Your task:
+1. Open each conflicting file
+2. Resolve the conflicts by keeping the functionality from BOTH sides — do not discard changes from either side unless they are truly redundant
+3. Remove all conflict markers
+4. Make sure the resulting code compiles/works correctly
+
+Do NOT create any new files. Only edit the conflicting files listed above.`, info.Files)
+
+		err := ag.RunInline(info.RepoRoot, promptText)
+		if err == nil {
+			core.GitMust(info.RepoRoot, "add", "-A")
+			markers, _ := core.Git(info.RepoRoot, "diff", "--cached", "--name-only", "-S", "<<<<<<<")
+			if markers != "" {
+				fmt.Fprintf(w, "  ⚠ %s finished but some conflicts remain unresolved.\n", ag.Label())
+				fmt.Fprintln(w, "  Falling back to manual resolution.")
+				core.GitMust(info.RepoRoot, "reset")
+				printManualInstructions(w, info.RepoRoot, info.AgentIdx)
+				core.WriteFileContent(td+"/resolving", info.MergeMsg)
+				return
+			}
+			core.Git(info.RepoRoot, "commit", "-m", info.MergeMsg)
+			sha := core.GitMust(info.RepoRoot, "rev-parse", "HEAD")
+			core.WriteFileContent(td+"/merge_commit", sha)
+			fmt.Fprintf(w, "  ✓ %s resolved all conflicts and committed.\n", ag.Label())
+			return
+		}
+		fmt.Fprintf(w, "  ⚠ %s failed. Falling back to manual resolution.\n", ag.Label())
+		printManualInstructions(w, info.RepoRoot, info.AgentIdx)
+		core.WriteFileContent(td+"/resolving", info.MergeMsg)
+
+	default:
+		// Abort (including -1 = cancelled)
+		core.GitMust(info.RepoRoot, "reset", "--hard", "HEAD")
+		fmt.Fprintf(w, "  ⊘ Merge aborted. Agent %d preserved for retry.\n", info.AgentIdx)
+	}
+}

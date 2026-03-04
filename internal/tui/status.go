@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -31,6 +30,29 @@ type TUIResult struct {
 	Action   TUIAction
 	AgentIdx int // selected agent index, or -1 if none
 }
+
+// ActionResult is returned by TUI action handlers. Implementations are
+// ActionDone (simple output) and MenuRequest (inline menu needed).
+type ActionResult interface {
+	isActionResult()
+}
+
+// ActionDone signals that the action completed. Lines are shown as status.
+type ActionDone struct {
+	Lines []string
+}
+
+func (ActionDone) isActionResult() {}
+
+// MenuRequest signals that the action needs user input via an inline menu.
+type MenuRequest struct {
+	Title    string
+	Options  []string
+	Lines    []string                    // status lines shown above the menu
+	Callback func(choice int) ActionResult // called with selected index (-1 = cancelled)
+}
+
+func (MenuRequest) isActionResult() {}
 
 const (
 	cardWidth = 42
@@ -211,6 +233,7 @@ type tuiMode int
 const (
 	modeNormal   tuiMode = iota
 	modeSpawning         // text input for spawn task name
+	modeMenu             // inline menu selection
 )
 
 type interactiveTUIModel struct {
@@ -222,9 +245,13 @@ type interactiveTUIModel struct {
 	quitting      bool
 	mode          tuiMode
 	spinner       spinner.Model
-	textInput     textinput.Model                  // for spawn
-	statusLines   []string                         // output from last action
-	actionHandler func(TUIResult, string) []string // returns captured output lines; string is spawn name
+	textInput     textinput.Model                       // for spawn
+	statusLines   []string                              // output from last action
+	actionHandler func(TUIResult, string) ActionResult  // returns action result
+	menuTitle     string                                // inline menu title
+	menuOptions   []string                              // inline menu options
+	menuCursor    int                                   // inline menu cursor
+	menuCallback  func(int) ActionResult                // inline menu callback
 }
 
 type tickMsg time.Time
@@ -264,15 +291,9 @@ func (m interactiveTUIModel) cols() int {
 	return cols
 }
 
-// actionDoneMsg is sent when an inline action completes.
-type actionDoneMsg struct {
-	lines []string
-}
-
-// suspendActionMsg triggers a suspend-based action (merge needs sub-TUIs).
-type suspendActionMsg struct {
-	action   TUIAction
-	agentIdx int
+// actionResultMsg wraps an ActionResult returned by the action handler.
+type actionResultMsg struct {
+	result ActionResult
 }
 
 func (m interactiveTUIModel) Init() tea.Cmd {
@@ -295,33 +316,35 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case actionDoneMsg:
-		m.statusLines = msg.lines
-		m.refreshAgents()
-		return m, nil
-
-	case tea.ResumeMsg:
-		// Returned from a suspended action (merge)
-		m.refreshAgents()
-		return m, nil
-
-	case suspendDoneMsg:
-		// Returned from tea.Exec-based suspended action (merge)
-		m.refreshAgents()
+	case actionResultMsg:
+		switch v := msg.result.(type) {
+		case ActionDone:
+			m.statusLines = v.Lines
+			m.refreshAgents()
+		case MenuRequest:
+			m.mode = modeMenu
+			m.menuTitle = v.Title
+			m.menuOptions = v.Options
+			m.menuCursor = 0
+			m.menuCallback = v.Callback
+			m.statusLines = v.Lines
+			m.refreshAgents()
+		}
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle spawning mode (text input)
-		if m.mode == modeSpawning {
+		switch m.mode {
+		case modeSpawning:
 			return m.updateSpawning(msg)
+		case modeMenu:
+			return m.updateMenu(msg)
+		default:
+			// Normal mode — clear status on any key if showing status
+			if len(m.statusLines) > 0 {
+				m.statusLines = nil
+			}
+			return m.updateNormal(msg)
 		}
-
-		// Normal mode — clear status on any key if showing status
-		if len(m.statusLines) > 0 {
-			m.statusLines = nil
-		}
-
-		return m.updateNormal(msg)
 	}
 
 	// Forward to text input if in spawning mode
@@ -348,8 +371,7 @@ func (m interactiveTUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
 		handler := m.actionHandler
 		return m, func() tea.Msg {
-			lines := handler(result, name)
-			return actionDoneMsg{lines: lines}
+			return actionResultMsg{result: handler(result, name)}
 		}
 	case "esc", "ctrl+c":
 		m.mode = modeNormal
@@ -359,6 +381,35 @@ func (m interactiveTUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd
+}
+
+func (m interactiveTUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.menuCursor > 0 {
+			m.menuCursor--
+		}
+	case "down", "j":
+		if m.menuCursor < len(m.menuOptions)-1 {
+			m.menuCursor++
+		}
+	case "enter":
+		m.mode = modeNormal
+		cb := m.menuCallback
+		cursor := m.menuCursor
+		m.statusLines = nil
+		return m, func() tea.Msg {
+			return actionResultMsg{result: cb(cursor)}
+		}
+	case "esc", "ctrl+c":
+		m.mode = modeNormal
+		cb := m.menuCallback
+		m.statusLines = nil
+		return m, func() tea.Msg {
+			return actionResultMsg{result: cb(-1)}
+		}
+	}
+	return m, nil
 }
 
 func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -446,48 +497,14 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// runInlineAction runs an action that doesn't need sub-TUIs, capturing output.
+// runInlineAction runs an action in a goroutine. The handler may return
+// ActionDone (status lines) or MenuRequest (inline menu).
 func (m interactiveTUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
 	handler := m.actionHandler
 	return m, func() tea.Msg {
-		lines := handler(result, "")
-		return actionDoneMsg{lines: lines}
+		return actionResultMsg{result: handler(result, "")}
 	}
-}
-
-// suspendedActionCmd implements tea.ExecCommand so we can use tea.Exec
-// instead of tea.Suspend. tea.Suspend sends SIGTSTP which stops the entire
-// process group — that works from a shell but crashes the TUI when it IS the
-// foreground job (e.g. inside tmux). tea.Exec properly releases and restores
-// the terminal without sending signals.
-type suspendedActionCmd struct {
-	fn func()
-}
-
-func (c *suspendedActionCmd) Run() error {
-	c.fn()
-	return nil
-}
-
-func (c *suspendedActionCmd) SetStdin(io.Reader)  {}
-func (c *suspendedActionCmd) SetStdout(io.Writer) {}
-func (c *suspendedActionCmd) SetStderr(io.Writer) {}
-
-// suspendDoneMsg is sent when a suspended action (merge) completes.
-type suspendDoneMsg struct{}
-
-// runSuspendAction temporarily releases the terminal for actions that need
-// sub-TUIs (merge), then restores it when done.
-func (m interactiveTUIModel) runSuspendAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
-	result := TUIResult{Action: action, AgentIdx: agentIdx}
-	handler := m.actionHandler
-	cmd := tea.Exec(&suspendedActionCmd{fn: func() {
-		handler(result, "")
-	}}, func(err error) tea.Msg {
-		return suspendDoneMsg{}
-	})
-	return m, cmd
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
@@ -608,6 +625,25 @@ func (m interactiveTUIModel) View() string {
 		return b.String()
 	}
 
+	// Show inline menu
+	if m.mode == modeMenu {
+		b.WriteString(titleStyle.Render(m.menuTitle))
+		b.WriteString("\n\n")
+		for i, opt := range m.menuOptions {
+			cursor := "  "
+			style := pickerNormalStyle
+			if i == m.menuCursor {
+				cursor = pickerCursorStyle.Render("▸ ")
+				style = pickerSelectedStyle
+			}
+			b.WriteString(cursor + style.Render(opt) + "\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(pickerHintStyle.Render("  j/k navigate · enter select · esc cancel"))
+		b.WriteString("\n")
+		return b.String()
+	}
+
 	// Action bar based on selected agent
 	var selected *core.AgentState
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
@@ -620,13 +656,12 @@ func (m interactiveTUIModel) View() string {
 }
 
 // RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
-// user triggers an action. For inline actions, output is captured and displayed
-// in the TUI. For actions needing sub-TUIs (merge), the TUI is
-// temporarily suspended.
+// user triggers an action. It returns an ActionResult: ActionDone for simple
+// status output, or MenuRequest to show an inline menu within the TUI.
 //
 // The actionHandler receives a TUIResult and an optional spawn name (non-empty
-// only for ActionSpawn). It returns captured output lines (nil for suspended actions).
-func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult, string) []string) {
+// only for ActionSpawn).
+func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult, string) ActionResult) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
 			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},

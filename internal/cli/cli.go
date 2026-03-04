@@ -87,7 +87,7 @@ func cmdMerge(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		if err := ops.MergeOne(os.Stdout, repoRoot, idx, true); err != nil {
+		if err := ops.MergeOne(os.Stdout, repoRoot, idx, ops.MergeInteractive); err != nil {
 			core.Fatal(err.Error())
 		}
 		return
@@ -96,7 +96,7 @@ func cmdMerge(args []string) {
 		return a.MergeCommit == "" && a.Resolving == ""
 	})
 	for _, idx := range indices {
-		ops.MergeOne(os.Stdout, repoRoot, idx, true)
+		ops.MergeOne(os.Stdout, repoRoot, idx, ops.MergeInteractive)
 	}
 }
 
@@ -169,37 +169,66 @@ func cmdCancel(args []string) {
 	}
 }
 
-func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
-	return func(result tui.TUIResult, spawnName string) []string {
-		var buf bytes.Buffer
+func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) tui.ActionResult {
+	return func(result tui.TUIResult, spawnName string) tui.ActionResult {
+		// All ops output is discarded — the TUI refreshes agent state
+		// automatically, so no feedback text is needed.
+		var sink bytes.Buffer
+		idx := result.AgentIdx
+
 		switch result.Action {
-		case tui.ActionSpawn:
-			ops.SpawnByName(&buf, repoRoot, spawnName)
 		case tui.ActionMerge:
-			if result.AgentIdx >= 0 {
-				ops.MergeOne(&buf, repoRoot, result.AgentIdx, false)
+			if idx >= 0 {
+				err := ops.MergeOne(&sink, repoRoot, idx, ops.MergeTUI)
+				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
+					autoFixLabel := "Auto-fix with AI"
+					if conflictErr.AgentLabel != "" {
+						autoFixLabel = fmt.Sprintf("Auto-fix with %s", conflictErr.AgentLabel)
+					}
+					return tui.MenuRequest{
+						Title: fmt.Sprintf("Conflict merging agent %d — how to resolve?", idx),
+						Options: []string{
+							"Continue — leave conflicts, resolve manually",
+							autoFixLabel + " — resolve conflicts keeping both sides",
+							"Abort — discard merge and reset",
+						},
+						Callback: func(choice int) tui.ActionResult {
+							var sink2 bytes.Buffer
+							ops.ResolveConflict(&sink2, conflictErr, choice)
+							return tui.ActionDone{}
+						},
+					}
+				}
 			}
+
+		case tui.ActionSpawn:
+			ops.SpawnByName(&sink, repoRoot, spawnName)
+
 		case tui.ActionAccept:
-			if result.AgentIdx >= 0 {
-				ops.AcceptOne(&buf, repoRoot, result.AgentIdx)
+			if idx >= 0 {
+				ops.AcceptOne(&sink, repoRoot, idx)
 			}
+
 		case tui.ActionReject:
-			if result.AgentIdx >= 0 {
-				ops.RejectOne(&buf, repoRoot, result.AgentIdx)
+			if idx >= 0 {
+				ops.RejectOne(&sink, repoRoot, idx)
 			}
+
 		case tui.ActionCancel:
-			if result.AgentIdx >= 0 {
-				ops.CancelOne(&buf, repoRoot, result.AgentIdx)
+			if idx >= 0 {
+				ops.CancelOne(&sink, repoRoot, idx)
 			}
+
 		case tui.ActionFocus:
-			if result.AgentIdx >= 0 {
-				ag, err := core.ReadAgent(repoRoot, result.AgentIdx)
+			if idx >= 0 {
+				ag, err := core.ReadAgent(repoRoot, idx)
 				if err == nil {
 					core.TmuxRun("select-window", "-t", ag.Window)
 				}
 			}
 		}
-		return nil
+
+		return tui.ActionDone{}
 	}
 }
 

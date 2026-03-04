@@ -6,11 +6,42 @@ import (
 	"os"
 	"strings"
 
+	"github.com/xemotrix/augmux/internal/agent"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/tui"
 )
 
-func MergeOne(w io.Writer, repoRoot string, idx int, interactive bool) error {
+// MergeMode controls how MergeOne handles interactive decision points.
+type MergeMode int
+
+const (
+	// MergeInteractive shows tui.RunMenu prompts for conflicts and uncommitted
+	// changes. Used by the CLI commands (augmux merge).
+	MergeInteractive MergeMode = iota
+
+	// MergeTUI auto-commits uncommitted changes and returns *MergeConflictErr
+	// (without resetting the working tree) when conflicts are found, so the
+	// caller can show an inline menu inside the TUI.
+	MergeTUI
+)
+
+// MergeConflictErr is returned by MergeOne in MergeTUI mode when conflicts
+// are detected. The working tree is left in the conflicted state so the
+// caller can resolve, auto-fix, or abort.
+type MergeConflictErr struct {
+	RepoRoot   string
+	AgentIdx   int
+	AgentDesc  string
+	MergeMsg   string
+	Files      string // newline-separated list of conflicting files
+	AgentLabel string // AI agent CLI label (e.g. "Claude Code")
+}
+
+func (e *MergeConflictErr) Error() string {
+	return "merge conflicts detected"
+}
+
+func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 	repoRoot = core.MustAbs(repoRoot)
 	td := core.TaskDir(repoRoot, idx)
 
@@ -56,7 +87,7 @@ func MergeOne(w io.Writer, repoRoot string, idx int, interactive bool) error {
 	if core.IsDir(ag.Worktree) {
 		porcelain := core.GitMust(ag.Worktree, "status", "--porcelain")
 		if porcelain != "" {
-			if interactive {
+			if mode == MergeInteractive {
 				fmt.Fprintln(w)
 				fmt.Fprintln(w, "  ⚠ Uncommitted changes in worktree:")
 				for line := range strings.SplitSeq(core.GitMust(ag.Worktree, "status", "--short"), "\n") {
@@ -77,7 +108,7 @@ func MergeOne(w io.Writer, repoRoot string, idx int, interactive bool) error {
 				}
 				fmt.Fprintln(w)
 			} else {
-				// Non-interactive: auto-commit uncommitted changes
+				// MergeTUI: auto-commit uncommitted changes
 				core.GitMust(ag.Worktree, "add", "-A")
 				core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
 				fmt.Fprintln(w, "  ✓ Uncommitted changes auto-committed.")
@@ -122,27 +153,36 @@ func MergeOne(w io.Writer, repoRoot string, idx int, interactive bool) error {
 	}
 
 	// Conflict path
-	if !interactive {
-		// Non-interactive: abort merge on conflict, let user handle via CLI
-		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
-		fmt.Fprintln(w, "  ✗ Conflicts detected. Use 'augmux merge' from CLI to resolve.")
-		return fmt.Errorf("conflicts detected")
-	}
+	switch mode {
+	case MergeTUI:
+		// Return conflict info without resetting — caller shows inline menu.
+		files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
+		aiAgent := agent.ActiveAgent()
+		return &MergeConflictErr{
+			RepoRoot:   repoRoot,
+			AgentIdx:   idx,
+			AgentDesc:  ag.Description,
+			MergeMsg:   mergeMsg,
+			Files:      files,
+			AgentLabel: aiAgent.Label(),
+		}
 
-	result := handleConflict(w, repoRoot, ag.Description, mergeMsg, idx)
-	switch result {
-	case conflictContinue:
-		core.WriteFileContent(td+"/resolving", mergeMsg)
-		return fmt.Errorf("resolving conflicts")
-	case conflictAutoFixed:
-		sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
-		core.WriteFileContent(td+"/merge_commit", sha)
-		fmt.Fprintln(w)
-		printAcceptRejectHint(w, idx)
-		return nil
-	default:
-		fmt.Fprintf(w, "  Agent %d preserved for retry.\n", idx)
-		return fmt.Errorf("aborted")
+	default: // MergeInteractive
+		result := handleConflict(w, repoRoot, ag.Description, mergeMsg, idx)
+		switch result {
+		case conflictContinue:
+			core.WriteFileContent(td+"/resolving", mergeMsg)
+			return fmt.Errorf("resolving conflicts")
+		case conflictAutoFixed:
+			sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
+			core.WriteFileContent(td+"/merge_commit", sha)
+			fmt.Fprintln(w)
+			printAcceptRejectHint(w, idx)
+			return nil
+		default:
+			fmt.Fprintf(w, "  Agent %d preserved for retry.\n", idx)
+			return fmt.Errorf("aborted")
+		}
 	}
 }
 
