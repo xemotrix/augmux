@@ -46,7 +46,7 @@ Session state is stored in `.augmux-state/` at the repo root. Each agent has a `
 ### Spawning agents
 
 ```bash
-# Open $EDITOR to write a prompt, then spawn an agent with it
+# Shows a text input to write a prompt, then spawn an agent with it
 augmux spawn
 
 # Spawn one or more agents by name (opens agent CLI with no initial prompt)
@@ -69,6 +69,9 @@ Merge uses a two-phase flow: **merge → review → accept/reject**.
 # Merge a specific agent (squash merge into source branch)
 augmux merge 1
 
+# If there are multiple agents, shows an interactive picker
+augmux merge
+
 # Merge all unmerged agents
 augmux merge --all
 ```
@@ -81,6 +84,10 @@ After merging, the agent's tmux window and worktree are kept alive. You can revi
 # Happy with the merge — clean up the agent (kills window, removes worktree + branch)
 augmux accept 1
 augmux accept --all
+
+# If there are multiple agents, shows an interactive picker
+augmux accept
+augmux reject
 
 # Not happy — undo the merge commit, agent stays alive for fixes
 augmux reject 1
