@@ -58,7 +58,7 @@ augmux spawn "add tests" "update docs" "refactor api"
 
 ```bash
 augmux status            # one-shot grid view
-augmux status --watch    # live dashboard (alias for 'augmux tui')
+augmux status --watch    # live dashboard (alias for 'augmux tui', also -w)
 augmux tui               # interactive dashboard (navigate, act on agents)
 ```
 
