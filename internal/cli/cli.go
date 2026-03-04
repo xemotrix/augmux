@@ -92,7 +92,7 @@ func cmdMerge(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		if err := ops.MergeOne(repoRoot, idx); err != nil {
+		if err := ops.MergeOne(repoRoot, idx, true); err != nil {
 			core.Fatal(err.Error())
 		}
 		return
@@ -101,7 +101,7 @@ func cmdMerge(args []string) {
 		return a.MergeCommit == "" && a.Resolving == ""
 	})
 	for _, idx := range indices {
-		ops.MergeOne(repoRoot, idx)
+		ops.MergeOne(repoRoot, idx, true)
 	}
 }
 
@@ -183,13 +183,13 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 				ops.SpawnByName(repoRoot, spawnName)
 			})
 		case tui.ActionMerge:
-			// Merge may need sub-TUIs (conflict resolution) — runs in suspended mode
 			if result.AgentIdx >= 0 {
-				if err := ops.MergeOne(repoRoot, result.AgentIdx); err != nil {
-					fmt.Printf("  ⚠ %v\n", err)
-				}
+				return tui.CaptureOutput(func() {
+					if err := ops.MergeOne(repoRoot, result.AgentIdx, false); err != nil {
+						fmt.Printf("  ⚠ %v\n", err)
+					}
+				})
 			}
-			return nil
 		case tui.ActionAccept:
 			if result.AgentIdx >= 0 {
 				// Suppress stdout output — TUI state updates organically

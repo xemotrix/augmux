@@ -82,7 +82,7 @@ func MergeAll(repoRoot string) {
 	fmt.Printf("Merging all agent branches into '%s'...\n\n", srcBranch)
 
 	for _, idx := range core.ListAgents(repoRoot) {
-		MergeOne(repoRoot, idx)
+		MergeOne(repoRoot, idx, true)
 		fmt.Println()
 	}
 

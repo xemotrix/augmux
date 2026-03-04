@@ -9,7 +9,7 @@ import (
 	"github.com/xemotrix/augmux/internal/tui"
 )
 
-func MergeOne(repoRoot string, idx int) error {
+func MergeOne(repoRoot string, idx int, interactive bool) error {
 	repoRoot = core.MustAbs(repoRoot)
 	td := core.TaskDir(repoRoot, idx)
 
@@ -55,25 +55,32 @@ func MergeOne(repoRoot string, idx int) error {
 	if core.IsDir(ag.Worktree) {
 		porcelain := core.GitMust(ag.Worktree, "status", "--porcelain")
 		if porcelain != "" {
-			fmt.Println()
-			fmt.Println("  ⚠ Uncommitted changes in worktree:")
-			for _, line := range strings.Split(core.GitMust(ag.Worktree, "status", "--short"), "\n") {
-				fmt.Printf("    %s\n", line)
-			}
-			fmt.Println()
-			choice := tui.RunMenu("Uncommitted changes — cannot merge", []string{
-				"Commit them now with a default message",
-				"Abort merge for this agent",
-			})
-			if choice == 0 {
+			if interactive {
+				fmt.Println()
+				fmt.Println("  ⚠ Uncommitted changes in worktree:")
+				for _, line := range strings.Split(core.GitMust(ag.Worktree, "status", "--short"), "\n") {
+					fmt.Printf("    %s\n", line)
+				}
+				fmt.Println()
+				choice := tui.RunMenu("Uncommitted changes — cannot merge", []string{
+					"Commit them now with a default message",
+					"Abort merge for this agent",
+				})
+				if choice == 0 {
+					core.GitMust(ag.Worktree, "add", "-A")
+					core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
+					fmt.Println("  ✓ Changes committed.")
+				} else {
+					fmt.Printf("  ⊘ Merge aborted for agent %d. Worktree preserved.\n", idx)
+					return fmt.Errorf("aborted")
+				}
+				fmt.Println()
+			} else {
+				// Non-interactive: auto-commit uncommitted changes
 				core.GitMust(ag.Worktree, "add", "-A")
 				core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
-				fmt.Println("  ✓ Changes committed.")
-			} else {
-				fmt.Printf("  ⊘ Merge aborted for agent %d. Worktree preserved.\n", idx)
-				return fmt.Errorf("aborted")
+				fmt.Println("  ✓ Uncommitted changes auto-committed.")
 			}
-			fmt.Println()
 		}
 	}
 
@@ -114,6 +121,13 @@ func MergeOne(repoRoot string, idx int) error {
 	}
 
 	// Conflict path
+	if !interactive {
+		// Non-interactive: abort merge on conflict, let user handle via CLI
+		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
+		fmt.Println("  ✗ Conflicts detected. Use 'augmux merge' from CLI to resolve.")
+		return fmt.Errorf("conflicts detected")
+	}
+
 	result := handleConflict(repoRoot, ag.Description, mergeMsg, idx)
 	switch result {
 	case conflictContinue:

@@ -418,7 +418,7 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	case "m":
 		if isWip {
-			return m.runSuspendAction(ActionMerge, agentIdx)
+			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
 		if isMerged {
