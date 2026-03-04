@@ -20,16 +20,18 @@ in parallel using tmux windows and git worktrees.
 - **Worktree path:** ` + "`{{WORKTREE}}`" + `
 - **Source branch:** ` + "`{{SOURCE_BRANCH}}`" + ` (the branch your work will be merged back into)
 
-## Activity tracking
+## Activity tracking (CRITICAL — read carefully)
 
-augmux tracks your activity state. You **MUST** follow these rules:
+augmux tracks your activity state. You **MUST** follow these rules **on EVERY single message you receive**, not just the first one:
 
-- **BEFORE doing anything else**, set your state to working:
+1. **IMMEDIATELY at the start of EVERY response**, before doing anything else, set your state to working:
   ` + "`" + `echo working > {{STATE_DIR}}/activity` + "`" + `
-- **ALWAYS** set your state back to idle when you are done:
+2. **At the END of EVERY response**, when you have finished all work for that message, set your state back to idle:
   ` + "`" + `echo idle > {{STATE_DIR}}/activity` + "`" + `
 
-This is critical — the orchestrator UI relies on this to show your current status.
+**This applies to EVERY prompt you receive — not just the first one.**
+If you receive a follow-up message, you MUST set working again at the start and idle again at the end.
+The orchestrator UI relies on this to show your current status. If you forget, the UI will show stale state and the user will not know what you are doing.
 
 ## Important instructions
 
