@@ -57,7 +57,11 @@ func cmdSpawn(args []string) {
 func cmdTUI() {
 	repoRoot, err := core.FindRepoFromState()
 	if err != nil {
-		core.Fatal(err.Error())
+		// No session yet — fall back to git repo root and open TUI with no agents.
+		repoRoot, err = core.FindRepoRoot()
+		if err != nil {
+			core.Fatal(err.Error())
+		}
 	}
 	tui.RunInteractiveTUI(repoRoot, tuiActionHandler(repoRoot))
 }
