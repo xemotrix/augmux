@@ -431,14 +431,7 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.runSuspendAction(ActionFinish, agentIdx)
 	case "enter":
 		if sel != nil {
-			// Focus switches tmux window — quit the TUI
-			result := TUIResult{Action: ActionFocus, AgentIdx: agentIdx}
-			handler := m.actionHandler
-			m.quitting = true
-			return m, tea.Sequence(func() tea.Msg {
-				handler(result, "")
-				return nil
-			}, tea.Quit)
+			return m.runInlineAction(ActionFocus, agentIdx)
 		}
 	}
 	return m, nil
