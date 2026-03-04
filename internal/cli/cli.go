@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/ops"
@@ -51,7 +53,7 @@ func cmdSpawn(args []string) {
 	if err != nil {
 		core.Fatal(err.Error())
 	}
-	ops.Spawn(repoRoot, args)
+	ops.Spawn(os.Stdout, repoRoot, args)
 }
 
 func cmdTUI() {
@@ -84,7 +86,7 @@ func cmdMerge(args []string) {
 		core.Fatal(err.Error())
 	}
 	if len(args) > 0 && args[0] == "--all" {
-		ops.MergeAll(repoRoot)
+		ops.MergeAll(os.Stdout, repoRoot)
 		return
 	}
 	if len(args) > 0 {
@@ -92,7 +94,7 @@ func cmdMerge(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		if err := ops.MergeOne(repoRoot, idx, true); err != nil {
+		if err := ops.MergeOne(os.Stdout, repoRoot, idx, true); err != nil {
 			core.Fatal(err.Error())
 		}
 		return
@@ -101,7 +103,7 @@ func cmdMerge(args []string) {
 		return a.MergeCommit == "" && a.Resolving == ""
 	})
 	for _, idx := range indices {
-		ops.MergeOne(repoRoot, idx, true)
+		ops.MergeOne(os.Stdout, repoRoot, idx, true)
 	}
 }
 
@@ -111,7 +113,7 @@ func cmdAccept(args []string) {
 		core.Fatal(err.Error())
 	}
 	if len(args) > 0 && args[0] == "--all" {
-		ops.AcceptAll(repoRoot)
+		ops.AcceptAll(os.Stdout, repoRoot)
 		return
 	}
 	if len(args) > 0 {
@@ -119,7 +121,7 @@ func cmdAccept(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		if err := ops.AcceptOne(repoRoot, idx); err != nil {
+		if err := ops.AcceptOne(os.Stdout, repoRoot, idx); err != nil {
 			core.Fatal(err.Error())
 		}
 		return
@@ -128,7 +130,7 @@ func cmdAccept(args []string) {
 		return a.MergeCommit != ""
 	})
 	for _, idx := range indices {
-		ops.AcceptOne(repoRoot, idx)
+		ops.AcceptOne(os.Stdout, repoRoot, idx)
 	}
 }
 
@@ -142,7 +144,7 @@ func cmdReject(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		if err := ops.RejectOne(repoRoot, idx); err != nil {
+		if err := ops.RejectOne(os.Stdout, repoRoot, idx); err != nil {
 			core.Fatal(err.Error())
 		}
 		return
@@ -151,7 +153,7 @@ func cmdReject(args []string) {
 		return a.MergeCommit != "" || a.Resolving != ""
 	})
 	for _, idx := range indices {
-		ops.RejectOne(repoRoot, idx)
+		ops.RejectOne(os.Stdout, repoRoot, idx)
 	}
 }
 
@@ -165,54 +167,53 @@ func cmdCancel(args []string) {
 		if err != nil {
 			core.Fatal("Invalid agent ID: %s", args[0])
 		}
-		ops.CancelOne(repoRoot, idx)
+		ops.CancelOne(os.Stdout, repoRoot, idx)
 		return
 	}
 	indices := tui.RunPicker("Select agents to cancel", repoRoot, nil)
 	for _, idx := range indices {
-		ops.CancelOne(repoRoot, idx)
+		ops.CancelOne(os.Stdout, repoRoot, idx)
 	}
+}
+
+// bufferToLines converts a bytes.Buffer into a slice of output lines.
+func bufferToLines(buf *bytes.Buffer) []string {
+	output := strings.TrimRight(buf.String(), "\n")
+	if output == "" {
+		return nil
+	}
+	return strings.Split(output, "\n")
 }
 
 func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 	return func(result tui.TUIResult, spawnName string) []string {
+		var buf bytes.Buffer
 		switch result.Action {
 		case tui.ActionSpawn:
-			// spawnName is provided by the embedded text input
-			return tui.CaptureOutput(func() {
-				ops.SpawnByName(repoRoot, spawnName)
-			})
+			ops.SpawnByName(&buf, repoRoot, spawnName)
+			return bufferToLines(&buf)
 		case tui.ActionMerge:
 			if result.AgentIdx >= 0 {
-				return tui.CaptureOutput(func() {
-					if err := ops.MergeOne(repoRoot, result.AgentIdx, false); err != nil {
-						fmt.Printf("  ⚠ %v\n", err)
-					}
-				})
+				if err := ops.MergeOne(&buf, repoRoot, result.AgentIdx, false); err != nil {
+					fmt.Fprintf(&buf, "  ⚠ %v\n", err)
+				}
+				return bufferToLines(&buf)
 			}
 		case tui.ActionAccept:
 			if result.AgentIdx >= 0 {
-				// Suppress stdout output — TUI state updates organically
-				tui.CaptureOutput(func() {
-					ops.AcceptOne(repoRoot, result.AgentIdx)
-				})
+				ops.AcceptOne(&buf, repoRoot, result.AgentIdx)
 			}
 		case tui.ActionReject:
 			if result.AgentIdx >= 0 {
-				tui.CaptureOutput(func() {
-					ops.RejectOne(repoRoot, result.AgentIdx)
-				})
+				ops.RejectOne(&buf, repoRoot, result.AgentIdx)
 			}
 		case tui.ActionCancel:
 			if result.AgentIdx >= 0 {
-				tui.CaptureOutput(func() {
-					ops.CancelOne(repoRoot, result.AgentIdx)
-				})
+				ops.CancelOne(&buf, repoRoot, result.AgentIdx)
 			}
 		case tui.ActionFinish:
-			// Finish calls MergeAll which may need sub-TUIs — runs in suspended mode
-			ops.FinishAll(repoRoot)
-			return nil
+			ops.FinishAll(&buf, repoRoot)
+			return bufferToLines(&buf)
 		case tui.ActionFocus:
 			if result.AgentIdx >= 0 {
 				winName := fmt.Sprintf("augmux-%d", result.AgentIdx)
@@ -223,8 +224,6 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 	}
 }
 
-
-
 func cmdFinish() {
 	repoRoot, err := core.FindRepoFromState()
 	if err != nil {
@@ -232,7 +231,7 @@ func cmdFinish() {
 	}
 	fmt.Println("Finishing augmux session...")
 	fmt.Println()
-	ops.FinishAll(repoRoot)
+	ops.FinishAll(os.Stdout, repoRoot)
 }
 
 func cmdNuke() {
@@ -246,7 +245,7 @@ func cmdNuke() {
 		fmt.Println("Aborted.")
 		return
 	}
-	ops.TeardownAll(repoRoot)
+	ops.TeardownAll(os.Stdout, repoRoot)
 }
 
 func cmdHelp() {

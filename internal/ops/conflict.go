@@ -2,6 +2,7 @@ package ops
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/xemotrix/augmux/internal/agent"
@@ -17,20 +18,20 @@ const (
 	conflictAutoFixed
 )
 
-func handleConflict(repoRoot, task, mergeMsg string, agentIdx int) conflictResult {
+func handleConflict(w io.Writer, repoRoot, task, mergeMsg string, agentIdx int) conflictResult {
 	ag := agent.ActiveAgent()
-	fmt.Println()
-	fmt.Printf("  ✗ CONFLICT detected while merging '%s'\n", task)
-	fmt.Println()
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "  ✗ CONFLICT detected while merging '%s'\n", task)
+	fmt.Fprintln(w)
 
-	fmt.Println("  Conflicting files:")
+	fmt.Fprintln(w, "  Conflicting files:")
 	files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
 	for _, f := range strings.Split(files, "\n") {
 		if f != "" {
-			fmt.Printf("    %s\n", f)
+			fmt.Fprintf(w, "    %s\n", f)
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 
 	choice := tui.RunMenu("How do you want to resolve?", []string{
 		"Continue — leave conflicts in working tree, resolve manually",
@@ -40,18 +41,18 @@ func handleConflict(repoRoot, task, mergeMsg string, agentIdx int) conflictResul
 
 	switch choice {
 	case 0:
-		fmt.Println()
-		fmt.Println("  Conflicts left in working tree. To resolve:")
-		fmt.Printf("    1. Edit the conflicting files in: %s\n", repoRoot)
-		fmt.Println("    2. git add <resolved files>")
-		fmt.Println("    3. git commit")
-		fmt.Printf("    4. augmux merge %d\n", agentIdx)
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "  Conflicts left in working tree. To resolve:")
+		fmt.Fprintf(w, "    1. Edit the conflicting files in: %s\n", repoRoot)
+		fmt.Fprintln(w, "    2. git add <resolved files>")
+		fmt.Fprintln(w, "    3. git commit")
+		fmt.Fprintf(w, "    4. augmux merge %d\n", agentIdx)
 		return conflictContinue
 
 	case 1:
-		fmt.Println()
-		fmt.Printf("  🤖 Running %s to auto-fix conflicts...\n", ag.Label())
-		fmt.Println()
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "  🤖 Running %s to auto-fix conflicts...\n", ag.Label())
+		fmt.Fprintln(w)
 
 		promptText := fmt.Sprintf(`There are merge conflicts in the following files:
 
@@ -78,37 +79,37 @@ Do NOT create any new files. Only edit the conflicting files listed above.`, fil
 			// Check for leftover conflict markers in the staged files.
 			markers, _ := core.Git(repoRoot, "diff", "--cached", "--name-only", "-S", "<<<<<<<")
 			if markers != "" {
-				fmt.Println()
-				fmt.Printf("  ⚠ %s finished but some conflicts remain unresolved.\n", ag.Label())
-				fmt.Println("  Falling back to manual resolution.")
+				fmt.Fprintln(w)
+				fmt.Fprintf(w, "  ⚠ %s finished but some conflicts remain unresolved.\n", ag.Label())
+				fmt.Fprintln(w, "  Falling back to manual resolution.")
 				// Unstage so the user sees the unmerged state.
 				core.GitMust(repoRoot, "reset")
-				printManualInstructions(repoRoot, agentIdx)
+				printManualInstructions(w, repoRoot, agentIdx)
 				return conflictContinue
 			}
 			core.Git(repoRoot, "commit", "-m", mergeMsg)
-			fmt.Println()
-			fmt.Printf("  ✓ %s resolved all conflicts and committed.\n", ag.Label())
+			fmt.Fprintln(w)
+			fmt.Fprintf(w, "  ✓ %s resolved all conflicts and committed.\n", ag.Label())
 			return conflictAutoFixed
 		}
 
-		fmt.Println()
-		fmt.Printf("  ⚠ %s failed. Falling back to manual resolution.\n", ag.Label())
-		printManualInstructions(repoRoot, agentIdx)
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "  ⚠ %s failed. Falling back to manual resolution.\n", ag.Label())
+		printManualInstructions(w, repoRoot, agentIdx)
 		return conflictContinue
 
 	default:
 		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
-		fmt.Println("  ⊘ Merge aborted.")
+		fmt.Fprintln(w, "  ⊘ Merge aborted.")
 		return conflictAbort
 	}
 }
 
-func printManualInstructions(repoRoot string, agentIdx int) {
-	fmt.Println()
-	fmt.Println("  Conflicts left in working tree. To resolve:")
-	fmt.Printf("    1. Edit the conflicting files in: %s\n", repoRoot)
-	fmt.Println("    2. git add <resolved files>")
-	fmt.Println("    3. git commit")
-	fmt.Printf("    4. augmux merge %d\n", agentIdx)
+func printManualInstructions(w io.Writer, repoRoot string, agentIdx int) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  Conflicts left in working tree. To resolve:")
+	fmt.Fprintf(w, "    1. Edit the conflicting files in: %s\n", repoRoot)
+	fmt.Fprintln(w, "    2. git add <resolved files>")
+	fmt.Fprintln(w, "    3. git commit")
+	fmt.Fprintf(w, "    4. augmux merge %d\n", agentIdx)
 }

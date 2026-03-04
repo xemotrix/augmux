@@ -2,6 +2,7 @@ package ops
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/xemotrix/augmux/internal/tui"
 )
 
-func ensureSession(repoRoot string) error {
+func ensureSession(w io.Writer, repoRoot string) error {
 	sd := core.StateDir(repoRoot)
 	if core.IsDir(sd) {
 		return nil
@@ -23,11 +24,11 @@ func ensureSession(repoRoot string) error {
 	os.MkdirAll(core.WorktreeBase(repoRoot), 0755)
 	core.WriteFileContent(filepath.Join(sd, "source_branch"), branch)
 	core.WriteFileContent(filepath.Join(sd, "repo_root"), repoRoot)
-	fmt.Printf("augmux session initialized (source branch: %s)\n", branch)
+	fmt.Fprintf(w, "augmux session initialized (source branch: %s)\n", branch)
 	return nil
 }
 
-func spawnOne(repoRoot, name string, ag *agent.AgentDef) {
+func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -61,42 +62,42 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) {
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
 
-	fmt.Printf("  ✓ Agent %d: '%s' → branch %s\n", idx, name, branchName)
-	fmt.Printf("    Window: %s\n", winName)
-	fmt.Printf("    Worktree: %s\n", wtPath)
+	fmt.Fprintf(w, "  ✓ Agent %d: '%s' → branch %s\n", idx, name, branchName)
+	fmt.Fprintf(w, "    Window: %s\n", winName)
+	fmt.Fprintf(w, "    Worktree: %s\n", wtPath)
 }
 
-func Spawn(repoRoot string, args []string) {
+func Spawn(w io.Writer, repoRoot string, args []string) {
 	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(repoRoot); err != nil {
+	if err := ensureSession(w, repoRoot); err != nil {
 		core.Fatal(err.Error())
 	}
 	ag := agent.ActiveAgent()
 	if len(args) == 0 {
 		name := tui.RunTextInput("Task name for new agent:")
 		if name == "" {
-			fmt.Println("Empty name — aborting.")
+			fmt.Fprintln(w, "Empty name — aborting.")
 			return
 		}
-		spawnOne(repoRoot, name, ag)
+		spawnOne(w, repoRoot, name, ag)
 	} else {
 		for _, name := range args {
-			spawnOne(repoRoot, name, ag)
+			spawnOne(w, repoRoot, name, ag)
 		}
 	}
-	fmt.Println()
-	fmt.Println("Check status: augmux status")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Check status: augmux status")
 }
 
 
 // SpawnByName spawns a single agent with the given name (no interactive prompt).
-func SpawnByName(repoRoot string, name string) {
+func SpawnByName(w io.Writer, repoRoot string, name string) {
 	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(repoRoot); err != nil {
+	if err := ensureSession(w, repoRoot); err != nil {
 		core.Fatal(err.Error())
 	}
 	ag := agent.ActiveAgent()
-	spawnOne(repoRoot, name, ag)
-	fmt.Println()
-	fmt.Println("Check status: augmux status")
+	spawnOne(w, repoRoot, name, ag)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Check status: augmux status")
 }
