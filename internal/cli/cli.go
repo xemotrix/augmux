@@ -192,23 +192,20 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult, string) []string {
 			return nil
 		case tui.ActionAccept:
 			if result.AgentIdx >= 0 {
-				return tui.CaptureOutput(func() {
-					if err := ops.AcceptOne(repoRoot, result.AgentIdx); err != nil {
-						fmt.Printf("  ⚠ %v\n", err)
-					}
+				// Suppress stdout output — TUI state updates organically
+				tui.CaptureOutput(func() {
+					ops.AcceptOne(repoRoot, result.AgentIdx)
 				})
 			}
 		case tui.ActionReject:
 			if result.AgentIdx >= 0 {
-				return tui.CaptureOutput(func() {
-					if err := ops.RejectOne(repoRoot, result.AgentIdx); err != nil {
-						fmt.Printf("  ⚠ %v\n", err)
-					}
+				tui.CaptureOutput(func() {
+					ops.RejectOne(repoRoot, result.AgentIdx)
 				})
 			}
 		case tui.ActionCancel:
 			if result.AgentIdx >= 0 {
-				return tui.CaptureOutput(func() {
+				tui.CaptureOutput(func() {
 					ops.CancelOne(repoRoot, result.AgentIdx)
 				})
 			}

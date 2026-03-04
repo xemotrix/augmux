@@ -480,9 +480,6 @@ func (m interactiveTUIModel) runSuspendAction(action TUIAction, agentIdx int) (t
 	handler := m.actionHandler
 	cmd := tea.Exec(&suspendedActionCmd{fn: func() {
 		handler(result, "")
-		fmt.Println()
-		fmt.Println("Press Enter to return to TUI...")
-		fmt.Scanln()
 	}}, func(err error) tea.Msg {
 		return suspendDoneMsg{}
 	})
