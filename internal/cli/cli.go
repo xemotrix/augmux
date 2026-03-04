@@ -21,6 +21,8 @@ func Run() {
 	switch args[0] {
 	case "spawn":
 		cmdSpawn(args[1:])
+	case "tui":
+		cmdTUI()
 	case "status":
 		cmdStatus(args[1:])
 	case "merge":
@@ -52,13 +54,21 @@ func cmdSpawn(args []string) {
 	ops.Spawn(repoRoot, args)
 }
 
+func cmdTUI() {
+	repoRoot, err := core.FindRepoFromState()
+	if err != nil {
+		core.Fatal(err.Error())
+	}
+	tui.RunInteractiveTUI(repoRoot)
+}
+
 func cmdStatus(args []string) {
 	repoRoot, err := core.FindRepoFromState()
 	if err != nil {
 		core.Fatal(err.Error())
 	}
 	if len(args) > 0 && (args[0] == "--watch" || args[0] == "-w") {
-		tui.RunStatusWatch(repoRoot)
+		tui.RunInteractiveTUI(repoRoot)
 		return
 	}
 	fmt.Println(tui.RenderStatusView(repoRoot, 120))
@@ -192,7 +202,8 @@ Usage:
   augmux spawn                        Open editor to write prompt, then spawn agent
   augmux spawn "name" ["name2" ...]   Create named agent(s) (agent CLI with no initial prompt)
   augmux status                       Show session status (grid view)
-  augmux status --watch               Live dashboard (auto-refresh)
+  augmux tui                          Interactive dashboard (navigate, act)
+  augmux status --watch               Alias for 'augmux tui'
   augmux merge <id>                   Merge agent into source branch (keeps agent alive)
   augmux merge --all                  Merge all unmerged agents
   augmux accept <id>                  Accept a merged agent (teardown worktree + window)
