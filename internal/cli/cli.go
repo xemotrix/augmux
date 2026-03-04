@@ -199,6 +199,11 @@ func tuiActionHandler(repoRoot string) func(tui.TUIResult) {
 			}
 		case tui.ActionFinish:
 			ops.FinishAll(repoRoot)
+		case tui.ActionFocus:
+			if result.AgentIdx >= 0 {
+				winName := fmt.Sprintf("augmux-%d", result.AgentIdx)
+				core.TmuxRun("select-window", "-t", winName)
+			}
 		}
 	}
 }

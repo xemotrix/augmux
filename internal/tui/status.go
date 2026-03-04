@@ -22,6 +22,7 @@ const (
 	ActionReject
 	ActionCancel
 	ActionFinish
+	ActionFocus
 )
 
 // TUIResult holds the result of an interactive TUI session.
@@ -328,6 +329,11 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			m.action = ActionFinish
 			return m, tea.Quit
+		case "enter":
+			if sel != nil {
+				m.action = ActionFocus
+				return m, tea.Quit
+			}
 		}
 	}
 	return m, nil
@@ -344,7 +350,10 @@ func renderActionBar(a *core.AgentState) string {
 	isMerged := a != nil && a.MergeCommit != ""
 	isResolving := a != nil && a.Resolving != ""
 
+	hasAgent := a != nil
+
 	actions := []action{
+		{"enter:focus", hasAgent},                      // focus agent window
 		{"spawn", true},                              // always available
 		{"merge", isWip},                              // wip agents only
 		{"accept", isMerged},                          // merged agents only
@@ -361,11 +370,22 @@ func renderActionBar(a *core.AgentState) string {
 	var parts []string
 	for _, act := range actions {
 		if act.enabled {
-			first := accentStyle.Render(string(act.name[0]))
-			rest := enabledStyle.Render(act.name[1:])
-			parts = append(parts, first+rest)
+			if idx := strings.Index(act.name, ":"); idx >= 0 {
+				// "key:label" format — highlight the key portion
+				key := act.name[:idx]
+				label := act.name[idx+1:]
+				parts = append(parts, accentStyle.Render(key)+" "+enabledStyle.Render(label))
+			} else {
+				first := accentStyle.Render(string(act.name[0]))
+				rest := enabledStyle.Render(act.name[1:])
+				parts = append(parts, first+rest)
+			}
 		} else {
-			parts = append(parts, disabledStyle.Render(act.name))
+			name := act.name
+			if idx := strings.Index(name, ":"); idx >= 0 {
+				name = name[:idx] + " " + name[idx+1:]
+			}
+			parts = append(parts, disabledStyle.Render(name))
 		}
 	}
 
@@ -459,6 +479,10 @@ func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult)) {
 			return
 		}
 		actionHandler(result)
+		// Focus just switches tmux window — no pause needed, exit the TUI loop.
+		if result.Action == ActionFocus {
+			return
+		}
 		// Pause so user can read output before TUI re-launches
 		fmt.Println()
 		fmt.Println("Press Enter to return to TUI...")
