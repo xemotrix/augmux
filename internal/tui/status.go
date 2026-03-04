@@ -309,6 +309,11 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshAgents()
 		return m, nil
 
+	case suspendDoneMsg:
+		// Returned from tea.Exec-based suspended action (merge/finish)
+		m.refreshAgents()
+		return m, nil
+
 	case tea.KeyMsg:
 		// Handle spawning mode (text input)
 		if m.mode == modeSpawning {
@@ -447,21 +452,41 @@ func (m interactiveTUIModel) runInlineAction(action TUIAction, agentIdx int) (te
 	}
 }
 
-// runSuspendAction suspends the TUI for actions that need sub-TUIs (merge, finish).
+// suspendedActionCmd implements tea.ExecCommand so we can use tea.Exec
+// instead of tea.Suspend. tea.Suspend sends SIGTSTP which stops the entire
+// process group — that works from a shell but crashes the TUI when it IS the
+// foreground job (e.g. inside tmux). tea.Exec properly releases and restores
+// the terminal without sending signals.
+type suspendedActionCmd struct {
+	fn func()
+}
+
+func (c *suspendedActionCmd) Run() error {
+	c.fn()
+	return nil
+}
+
+func (c *suspendedActionCmd) SetStdin(io.Reader)  {}
+func (c *suspendedActionCmd) SetStdout(io.Writer) {}
+func (c *suspendedActionCmd) SetStderr(io.Writer) {}
+
+// suspendDoneMsg is sent when a suspended action (merge/finish) completes.
+type suspendDoneMsg struct{}
+
+// runSuspendAction temporarily releases the terminal for actions that need
+// sub-TUIs (merge, finish), then restores it when done.
 func (m interactiveTUIModel) runSuspendAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
 	handler := m.actionHandler
-	return m, tea.Sequence(
-		tea.Suspend,
-		func() tea.Msg {
-			// Run the action in normal terminal mode
-			handler(result, "")
-			fmt.Println()
-			fmt.Println("Press Enter to return to TUI...")
-			fmt.Scanln()
-			return nil
-		},
-	)
+	cmd := tea.Exec(&suspendedActionCmd{fn: func() {
+		handler(result, "")
+		fmt.Println()
+		fmt.Println("Press Enter to return to TUI...")
+		fmt.Scanln()
+	}}, func(err error) tea.Msg {
+		return suspendDoneMsg{}
+	})
+	return m, cmd
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
