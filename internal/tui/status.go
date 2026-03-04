@@ -137,7 +137,7 @@ func tickEvery(d time.Duration) tea.Cmd {
 }
 
 func (m statusWatchModel) Init() tea.Cmd {
-	return tickEvery(2 * time.Second)
+	return tickEvery(500 * time.Millisecond)
 }
 
 func (m statusWatchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -147,7 +147,7 @@ func (m statusWatchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content = RenderStatusView(m.repoRoot, m.width)
 	case tickMsg:
 		m.content = RenderStatusView(m.repoRoot, m.width)
-		return m, tickEvery(2 * time.Second)
+		return m, tickEvery(500 * time.Millisecond)
 	case tea.KeyMsg:
 		if msg.String() == "q" || msg.String() == "esc" || msg.String() == "ctrl+c" {
 			m.quitting = true
@@ -161,7 +161,7 @@ func (m statusWatchModel) View() string {
 	if m.quitting {
 		return ""
 	}
-	return m.content + "\n\n" + pickerHintStyle.Render("  q quit · auto-refreshes every 2s") + "\n"
+	return m.content + "\n\n" + pickerHintStyle.Render("  q quit") + "\n"
 }
 
 func RunStatusWatch(repoRoot string) {
