@@ -55,6 +55,11 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 
 	// For Cursor, inject rules and commands via .cursor/ in the worktree.
 	if ag.ID == "cursor" {
+		srcCursor := filepath.Join(repoRoot, ".cursor")
+		if core.IsDir(srcCursor) {
+			core.CopyDir(srcCursor, filepath.Join(wtPath, ".cursor"))
+		}
+
 		cursorRulesDir := filepath.Join(wtPath, ".cursor", "rules")
 		os.MkdirAll(cursorRulesDir, 0o755)
 		mdcContent := agent.BuildCursorMDC(rulesContent)
