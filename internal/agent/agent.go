@@ -119,6 +119,15 @@ func SaveAgentChoice(id string) error {
 	return saveConfig(&agentConfig{Agent: id})
 }
 
+// ConfiguredAgent returns the configured agent without prompting, or nil if not configured.
+func ConfiguredAgent() *AgentDef {
+	cfg := loadConfig()
+	if cfg != nil {
+		return findAgent(cfg.Agent)
+	}
+	return nil
+}
+
 // ActiveAgent returns the configured agent, prompting for setup if needed.
 func ActiveAgent() *AgentDef {
 	cfg := loadConfig()

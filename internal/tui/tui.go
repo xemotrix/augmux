@@ -27,6 +27,7 @@ const (
 	ActionReject
 	ActionCancel
 	ActionFocus
+	ActionRebase
 )
 
 // TUIResult holds the result of an interactive TUI session.
@@ -309,6 +310,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	isWip := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
 	isMerged := sel != nil && sel.MergeCommit != ""
 	isResolving := sel != nil && sel.Resolving != ""
+	isIdle := sel != nil && sel.Activity == core.ActivityIdle
 
 	// Check if agent has commits ahead of source branch
 	hasCommits := false
@@ -374,6 +376,10 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if isWip || isResolving {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
+	case "b":
+		if isWip && sel.HasConflicts && isIdle {
+			return m.runInlineAction(ActionRebase, agentIdx)
+		}
 	case "enter":
 		if sel != nil {
 			return m.runInlineAction(ActionFocus, agentIdx)
@@ -402,6 +408,8 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	isWip := a != nil && a.MergeCommit == "" && a.Resolving == ""
 	isMerged := a != nil && a.MergeCommit != ""
 	isResolving := a != nil && a.Resolving != ""
+	isIdle := a != nil && a.Activity == core.ActivityIdle
+	hasConflicts := a != nil && a.HasConflicts
 
 	hasCommits := false
 	if a != nil && repoRoot != "" {
@@ -418,6 +426,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 		{"enter:focus", hasAgent},
 		{"spawn", true},
 		{"merge", isWip && hasCommits},
+		{"re|base", isWip && hasConflicts && isIdle},
 		{"accept", isMerged},
 		{"reject", isMerged || isResolving},
 		{"cancel", isWip || isResolving},
@@ -441,6 +450,14 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 					accentStyle.Render(key),
 					enabledStyle.Render(" "+label),
 				))
+			} else if idx := strings.Index(act.name, "|"); idx >= 0 {
+				prefix := act.name[:idx]
+				rest := act.name[idx+1:]
+				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
+					enabledStyle.Render(prefix),
+					accentStyle.Render(string(rest[0])),
+					enabledStyle.Render(rest[1:]),
+				))
 			} else {
 				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
 					accentStyle.Render(string(act.name[0])),
@@ -452,6 +469,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 			if idx := strings.Index(name, ":"); idx >= 0 {
 				name = name[:idx] + " " + name[idx+1:]
 			}
+			name = strings.ReplaceAll(name, "|", "")
 			parts = append(parts, disabledStyle.Render(name))
 		}
 	}
@@ -754,6 +772,20 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 				ops.CancelOne(&sink, repoRoot, idx)
 				return ActionDone{
 					Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
+					Level: ToastSuccess,
+				}
+			}
+
+		case ActionRebase:
+			if idx >= 0 {
+				if err := ops.SendRebase(repoRoot, idx); err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Rebase send failed: %s", err)},
+						Level: ToastError,
+					}
+				}
+				return ActionDone{
+					Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
 					Level: ToastSuccess,
 				}
 			}
