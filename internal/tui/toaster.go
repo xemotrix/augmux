@@ -68,7 +68,7 @@ func (t toaster) Update(msg tea.Msg) (toaster, tea.Cmd) {
 			duration: dur,
 		}
 		t.nextID++
-		t.toasts = append(t.toasts, tt)
+		t.toasts = append([]toast{tt}, t.toasts...)
 		id := tt.id
 		return t, tea.Tick(dur, func(time.Time) tea.Msg {
 			return toastExpiredMsg{id: id}
