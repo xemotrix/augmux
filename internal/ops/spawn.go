@@ -77,8 +77,9 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	winName := fmt.Sprintf("ax-%d-%s", idx, safe)
 	core.WriteFileContent(filepath.Join(td, "window"), winName)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
-	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
-		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))
+	core.TmuxRun("set-option", "-w", "-t", winName, "@augmux_worktree", wtPath)
+	core.TmuxRun("set-hook", "after-split-window",
+		`if-shell -F '#{@augmux_worktree}' 'send-keys "cd \"#{@augmux_worktree}\" && clear" Enter'`)
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
 }

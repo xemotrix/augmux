@@ -97,3 +97,21 @@ func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
 	return a.Command
 }
 
+// RebasePaneCmd returns the shell command to run a non-interactive agent
+// instance that performs only the rebase operation. The prompt is passed as a
+// CLI argument so no send-keys interaction is needed.
+func (a *AgentDef) RebasePaneCmd(prompt, rulesFile string) string {
+	escaped := strings.ReplaceAll(prompt, "'", "'\\''")
+	switch a.ID {
+	case "auggie":
+		if rulesFile != "" {
+			return fmt.Sprintf("%s --rules '%s' '%s'", a.Command, rulesFile, escaped)
+		}
+		return fmt.Sprintf("%s '%s'", a.Command, escaped)
+	case "cursor":
+		return fmt.Sprintf("%s --yolo --print '%s'", a.Command, escaped)
+	default:
+		return fmt.Sprintf("%s '%s'", a.Command, escaped)
+	}
+}
+
