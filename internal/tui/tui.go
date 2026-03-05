@@ -64,172 +64,6 @@ const (
 	textWidth = cardInner - 2 // minus padding (2); actual chars per line
 )
 
-func countUncommitted(worktree string) int {
-	out := core.GitMust(worktree, "status", "--porcelain")
-	if out == "" {
-		return 0
-	}
-	return len(strings.Split(out, "\n"))
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	if n <= 3 {
-		return s[:n]
-	}
-	return s[:n-3] + "..."
-}
-
-func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalColor {
-	if a.MergeCommit != "" {
-		return styles.ColorCyan // merged
-	}
-	if a.Resolving != "" {
-		return styles.ColorRed // resolving conflicts
-	}
-	if a.HasConflicts {
-		return styles.ColorRed // would conflict if merged
-	}
-	if a.Activity == core.ActivityWorking {
-		return styles.ColorYellow // working
-	}
-	// idle
-	if commitsAhead > 0 {
-		return styles.ColorGreen // idle, some commits
-	}
-	return styles.ColorDimGray // idle, no commits
-}
-
-func activityRawStr(a *core.AgentState) string {
-	if a.Activity == core.ActivityWorking {
-		return "⠋ working"
-	}
-	return "○ idle"
-}
-
-func activityIndicator(a *core.AgentState, spinnerFrame string) string {
-	if a.Activity == core.ActivityWorking {
-		return lipgloss.NewStyle().Foreground(styles.ColorYellow).Render(spinnerFrame + " working")
-	}
-	return lipgloss.NewStyle().Foreground(styles.ColorDimGray).Render("○ idle")
-}
-
-func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame string, selected ...bool) string {
-	sel := len(selected) > 0 && selected[0]
-
-	// Compute commits ahead early — needed for border styles.Color and branch line
-	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
-	if ahead == "" {
-		ahead = "?"
-	}
-	aheadNum := 0
-	fmt.Sscanf(ahead, "%d", &aheadNum)
-
-	borderColor := agentBorderColor(a, aheadNum)
-	bdr := lipgloss.NewStyle().Foreground(borderColor)
-	if sel {
-		bdr = bdr.Bold(true)
-	}
-
-	// Border characters: thicker (double-line) when selected
-	var cTL, cTR, cBL, cBR, cH, cV string
-	if sel {
-		cTL, cTR, cBL, cBR, cH, cV = "╔", "╗", "╚", "╝", "═", "║"
-	} else {
-		cTL, cTR, cBL, cBR, cH, cV = "╭", "╮", "╰", "╯", "─", "│"
-	}
-
-	statusRaw := AgentStatusRaw(a)
-	statusStyled := AgentStatusStyled(a, statusRaw)
-
-	// Top border: ╭─❮3❯──────────────────────── ● wip ─╮
-	idLabel := fmt.Sprintf("❮%d❯", a.Index)
-	idStyled := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWhite).Render(idLabel)
-
-	// cardWidth - "╭─"(2) - idLabel - fill - " status "(1+statusRaw+1) - "─╮"(2)
-	used := 2 + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + 2
-	fill := max(cardWidth-used, 1)
-	topLine := bdr.Render(cTL+cH) + idStyled +
-		bdr.Render(strings.Repeat(cH, fill)) +
-		" " + statusStyled + " " +
-		bdr.Render(cH+cTR)
-
-	// Description line with activity indicator on the right
-	activityStr := activityIndicator(a, spinnerFrame)
-	activityRaw := activityRawStr(a)
-	maxName := max(textWidth-lipgloss.Width(activityRaw)-1, 10)
-	name := truncate(a.Description, maxName)
-	namePad := max(textWidth-lipgloss.Width(name)-lipgloss.Width(activityRaw), 1)
-	nameLine := bdr.Render(cV) + " " + styles.ValueStyle.Render(name) +
-		strings.Repeat(" ", namePad) + activityStr + " " + bdr.Render(cV)
-
-	// Branch line
-	aheadStr := ahead + " ↑"
-
-	// Count uncommitted changes in the worktree
-	dirty := countUncommitted(a.Worktree)
-	dirtyStr := fmt.Sprintf("%d ✎", dirty)
-
-	rightInfo := aheadStr + "  " + dirtyStr
-	iconWidth := 2 // branchIcon + space
-	maxBranch := textWidth - lipgloss.Width(rightInfo) - 1 - iconWidth
-	branch := truncate(a.Branch, maxBranch)
-	branchGap := max(textWidth-lipgloss.Width(branch)-iconWidth-lipgloss.Width(rightInfo), 1)
-	branchLine := bdr.Render(cV) + " " + styles.RenderBranch(branch) +
-		strings.Repeat(" ", branchGap) +
-		styles.AheadStyle.Render(aheadStr) + "  " + styles.DirtyStyle.Render(dirtyStr) +
-		" " + bdr.Render(cV)
-
-	// Bottom border
-	bottomLine := bdr.Render(cBL + strings.Repeat(cH, cardWidth-2) + cBR)
-
-	return topLine + "\n" + nameLine + "\n" + branchLine + "\n" + bottomLine
-}
-
-func RenderStatusView(repoRoot string, termWidth int) string {
-	srcBranch := core.SourceBranch(repoRoot)
-	var b strings.Builder
-
-	b.WriteString(styles.TitleStyle.Render("  \uebc8 augmux session"))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
-		styles.HeaderKeyStyle.Render("Repo:"), styles.HeaderValStyle.Render(repoRoot),
-		styles.HeaderKeyStyle.Render("Source:"), styles.RenderBranch(srcBranch)))
-
-	agents := core.ListAgents(repoRoot)
-	if len(agents) == 0 {
-		b.WriteString(styles.LabelStyle.Render("  No agents running.\n"))
-		return b.String()
-	}
-
-	var cards []string
-	for _, idx := range agents {
-		a, err := core.ReadAgent(repoRoot, idx)
-		if err != nil {
-			continue
-		}
-		if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
-			a.HasConflicts = core.DetectConflicts(repoRoot, srcBranch, a.Branch)
-		}
-		cards = append(cards, renderAgentCard(a, repoRoot, srcBranch, "⠋"))
-	}
-
-	cols := min(max(termWidth/(cardWidth+1), 1), len(cards))
-
-	var rows []string
-	for i := 0; i < len(cards); i += cols {
-		end := min(i+cols, len(cards))
-		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
-		rows = append(rows, row)
-	}
-	b.WriteString(lipgloss.JoinVertical(lipgloss.Left, rows...))
-	b.WriteString("\n\n")
-	b.WriteString(styles.PickerHintStyle.Render("  spawn · merge · accept · reject · cancel"))
-	return b.String()
-}
-
 // Interactive TUI mode
 
 type tuiMode int
@@ -240,7 +74,7 @@ const (
 	modeMenu             // inline menu selection
 )
 
-type interactiveTUIModel struct {
+type TUIModel struct {
 	repoRoot      string
 	width         int
 	height        int
@@ -264,7 +98,7 @@ func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-func (m *interactiveTUIModel) refreshAgents() {
+func (m *TUIModel) refreshAgents() {
 	indices := core.ListAgents(m.repoRoot)
 	srcBranch := core.SourceBranch(m.repoRoot)
 	m.agents = nil
@@ -287,7 +121,7 @@ func (m *interactiveTUIModel) refreshAgents() {
 	}
 }
 
-func (m interactiveTUIModel) cols() int {
+func (m TUIModel) cols() int {
 	cols := max(m.width/(cardWidth+1), 1)
 	if len(m.agents) > 0 && cols > len(m.agents) {
 		cols = len(m.agents)
@@ -300,11 +134,11 @@ type actionResultMsg struct {
 	result ActionResult
 }
 
-func (m interactiveTUIModel) Init() tea.Cmd {
+func (m TUIModel) Init() tea.Cmd {
 	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick)
 }
 
-func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -361,7 +195,7 @@ func (m interactiveTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m interactiveTUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		name := strings.TrimSpace(m.textInput.Value())
@@ -387,7 +221,7 @@ func (m interactiveTUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
-func (m interactiveTUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m TUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.menuCursor > 0 {
@@ -416,7 +250,7 @@ func (m interactiveTUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.agents)
 	cols := m.cols()
 
@@ -503,7 +337,7 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // runInlineAction runs an action in a goroutine. The handler may return
 // ActionDone (status lines) or MenuRequest (inline menu).
-func (m interactiveTUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
+func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
 	handler := m.actionHandler
 	return m, func() tea.Msg {
@@ -573,7 +407,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	return "  " + strings.Join(parts, sepStyle.Render(" · "))
 }
 
-func (m interactiveTUIModel) View() string {
+func (m TUIModel) View() string {
 	if m.quitting {
 		return ""
 	}
@@ -593,7 +427,7 @@ func (m interactiveTUIModel) View() string {
 		spinnerFrame := m.spinner.View()
 		var cards []string
 		for i, a := range m.agents {
-			cards = append(cards, renderAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
+			cards = append(cards, RunAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
 		}
 
 		cols := m.cols()
@@ -675,7 +509,7 @@ func RunInteractiveTUI(
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
 	)
-	m := interactiveTUIModel{
+	m := TUIModel{
 		repoRoot:      repoRoot,
 		width:         100,
 		spinner:       s,

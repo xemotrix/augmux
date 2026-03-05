@@ -139,7 +139,6 @@ func (a *AgentDef) RunInline(dir, promptText string) error {
 	return cmd.Run()
 }
 
-// AgentDisplayName returns a user-friendly name for the configured agent.
 func (a *AgentDef) Label() string {
 	return strings.Split(a.DisplayName, " (")[0] // e.g. "Auggie"
 }
