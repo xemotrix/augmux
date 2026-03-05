@@ -442,7 +442,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	}
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
-	return lipgloss.NewStyle().PaddingLeft(2).Render(bar)
+	return bar
 }
 
 func renderMenu(title string, options []string, cursor int, hint string) string {
@@ -460,7 +460,7 @@ func renderMenu(title string, options []string, cursor int, hint string) string 
 	}
 	optionsList := lipgloss.JoinVertical(lipgloss.Left, items...)
 
-	hintLine := styles.PickerHintStyle.PaddingLeft(2).Render(hint)
+	hintLine := styles.PickerHintStyle.Render(hint)
 
 	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", optionsList, "", hintLine, "")
 }
@@ -472,7 +472,9 @@ func (m TUIModel) View() string {
 
 	srcBranch := core.SourceBranch(m.repoRoot)
 
-	title := styles.TitleStyle.PaddingLeft(2).Render("\uebc8 augmux session")
+	outerPad := lipgloss.NewStyle().PaddingLeft(2)
+
+	title := styles.TitleStyle.Render("\uebc8 augmux session")
 
 	header := lipgloss.JoinHorizontal(lipgloss.Center,
 		styles.HeaderKeyStyle.Render("Repo:"),
@@ -481,19 +483,17 @@ func (m TUIModel) View() string {
 		lipgloss.NewStyle().Render(" "),
 		styles.RenderBranch(srcBranch),
 	)
-	header = lipgloss.NewStyle().PaddingLeft(2).Render(header)
-
 	sections := []string{title, header, ""}
 
 	if m.mode == modeAgentSetup {
 		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
 			"j/k navigate · enter select · esc quit")
 		sections = append(sections, menu)
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
 
 	if len(m.agents) == 0 {
-		sections = append(sections, styles.LabelStyle.PaddingLeft(2).Render("No agents running."))
+		sections = append(sections, styles.LabelStyle.Render("No agents running."))
 	} else {
 		spinnerFrame := m.spinner.View()
 		var cards []string
@@ -525,17 +525,17 @@ func (m TUIModel) View() string {
 
 	if m.mode == modeSpawning {
 		spawnTitle := styles.TitleStyle.Render("Task name for new agent:")
-		inputLine := lipgloss.NewStyle().PaddingLeft(2).Render(m.textInput.View())
-		hint := styles.PickerHintStyle.PaddingLeft(2).Render("enter confirm · esc cancel")
+		inputLine := lipgloss.NewStyle().Render(m.textInput.View())
+		hint := styles.PickerHintStyle.Render("enter confirm · esc cancel")
 		sections = append(sections, spawnTitle, "", inputLine, "", hint, "")
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
 
 	if m.mode == modeMenu {
 		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
 			"j/k navigate · enter select · esc cancel")
 		sections = append(sections, menu)
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
 
 	var selected *core.AgentState
@@ -544,7 +544,7 @@ func (m TUIModel) View() string {
 	}
 	sections = append(sections, renderActionBar(selected, m.repoRoot), "")
 
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
 
 // RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
