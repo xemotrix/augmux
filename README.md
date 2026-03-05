@@ -120,10 +120,6 @@ augmux cancel
 augmux nuke
 ```
 
-A conflict 1!!!
-
-A conflict 2!!! wtf
-
 ## Typical Workflow
 
 ```bash
