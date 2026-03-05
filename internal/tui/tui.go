@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -197,6 +198,15 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func validateAgentName(s string) error {
+	for _, r := range s {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' {
+			return fmt.Errorf("only letters, numbers, and spaces are allowed")
+		}
+	}
+	return nil
+}
+
 func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -204,6 +214,10 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		if name == "" {
 			m.statusLines = []string{"Empty name — spawn aborted."}
+			return m, nil
+		}
+		if err := validateAgentName(name); err != nil {
+			m.statusLines = []string{"Invalid name: " + err.Error()}
 			return m, nil
 		}
 		// Run spawn with captured output
@@ -335,6 +349,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ti.Focus()
 		ti.CharLimit = 80
 		ti.Width = 50
+		ti.Validate = validateAgentName
 		ti.PromptStyle = styles.PickerCursorStyle
 		ti.TextStyle = styles.PickerSelectedStyle
 		m.textInput = ti
