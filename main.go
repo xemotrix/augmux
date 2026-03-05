@@ -1,5 +1,7 @@
 package main
 
+// conflict 1
+
 import (
 	"fmt"
 	"os"
