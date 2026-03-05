@@ -695,6 +695,62 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 
 		case ActionCancel:
 			if idx >= 0 {
+				ag, err := core.ReadAgent(repoRoot, idx)
+				if err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
+						Level: ToastError,
+					}
+				}
+
+				srcBranch := core.SourceBranch(repoRoot)
+				ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
+				aheadNum := 0
+				fmt.Sscanf(ahead, "%d", &aheadNum)
+
+				dirty := false
+				if core.IsDir(ag.Worktree) {
+					status, _ := core.Git(ag.Worktree, "status", "--porcelain")
+					dirty = status != ""
+				}
+
+				if aheadNum > 0 || dirty {
+					var warnings []string
+					if aheadNum > 0 {
+						commitWord := "commit"
+						if aheadNum != 1 {
+							commitWord = "commits"
+						}
+						warnings = append(warnings, fmt.Sprintf("%d %s", aheadNum, commitWord))
+					}
+					if dirty {
+						warnings = append(warnings, "uncommitted changes")
+					}
+					detail := strings.Join(warnings, " and ")
+
+					return MenuRequest{
+						Title: fmt.Sprintf("Cancel %s? It has %s that will be lost.", agentLabel, detail),
+						Options: []string{
+							"Yes — discard and cancel",
+							"No — keep agent",
+						},
+						Callback: func(choice int) ActionResult {
+							if choice == 0 {
+								var sink2 bytes.Buffer
+								ops.CancelOne(&sink2, repoRoot, idx)
+								return ActionDone{
+									Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
+									Level: ToastSuccess,
+								}
+							}
+							return ActionDone{
+								Lines: []string{"Cancel aborted"},
+								Level: ToastInfo,
+							}
+						},
+					}
+				}
+
 				ops.CancelOne(&sink, repoRoot, idx)
 				return ActionDone{
 					Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
