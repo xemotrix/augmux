@@ -96,7 +96,7 @@ func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 	// Count ahead
 	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
 	if ahead == "0" || ahead == "" {
-		teardownOne(w, repoRoot, idx)
+		teardownOne(repoRoot, idx)
 		return nil
 	}
 

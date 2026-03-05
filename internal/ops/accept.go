@@ -17,7 +17,7 @@ func AcceptOne(w io.Writer, repoRoot string, idx int) error {
 	if ag.MergeCommit == "" {
 		return fmt.Errorf("agent %d has not been merged yet. Run 'augmux merge %d' first", idx, idx)
 	}
-	teardownOne(w, repoRoot, idx)
+	teardownOne(repoRoot, idx)
 	return nil
 }
 

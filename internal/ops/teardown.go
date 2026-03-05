@@ -8,7 +8,7 @@ import (
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-func teardownOne(w io.Writer, repoRoot string, idx int) {
+func teardownOne(repoRoot string, idx int) {
 	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
 		return
@@ -51,7 +51,7 @@ func CancelOne(w io.Writer, repoRoot string, idx int) {
 		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
 	}
 
-	teardownOne(w, repoRoot, idx)
+	teardownOne(repoRoot, idx)
 }
 
 func TeardownAll(w io.Writer, repoRoot string) {
