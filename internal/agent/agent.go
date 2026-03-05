@@ -110,6 +110,22 @@ func promptAgentSetup() *AgentDef {
 	return agent
 }
 
+// IsConfigured returns true if a valid agent config exists.
+func IsConfigured() bool {
+	cfg := loadConfig()
+	return cfg != nil && findAgent(cfg.Agent) != nil
+}
+
+// KnownAgentDefs returns the list of supported agent CLIs.
+func KnownAgentDefs() []AgentDef {
+	return knownAgents
+}
+
+// SaveAgentChoice persists the given agent ID to the config file.
+func SaveAgentChoice(id string) error {
+	return saveConfig(&agentConfig{Agent: id})
+}
+
 // ActiveAgent returns the configured agent, prompting for setup if needed.
 func ActiveAgent() *AgentDef {
 	cfg := loadConfig()

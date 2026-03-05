@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/xemotrix/augmux/internal/agent"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/ops"
 	"github.com/xemotrix/augmux/internal/styles"
@@ -69,9 +70,10 @@ const (
 type tuiMode int
 
 const (
-	modeNormal   tuiMode = iota
-	modeSpawning         // text input for spawn task name
-	modeMenu             // inline menu selection
+	modeNormal     tuiMode = iota
+	modeSpawning           // text input for spawn task name
+	modeMenu               // inline menu selection
+	modeAgentSetup         // agent CLI picker shown on startup
 )
 
 type TUIModel struct {
@@ -172,6 +174,8 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch m.mode {
+		case modeAgentSetup:
+			return m.updateAgentSetup(msg)
 		case modeSpawning:
 			return m.updateSpawning(msg)
 		case modeMenu:
@@ -246,6 +250,34 @@ func (m TUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			return actionResultMsg{result: cb(-1)}
 		}
+	}
+	return m, nil
+}
+
+func (m TUIModel) updateAgentSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.menuCursor > 0 {
+			m.menuCursor--
+		}
+	case "down", "j":
+		if m.menuCursor < len(m.menuOptions)-1 {
+			m.menuCursor++
+		}
+	case "enter":
+		defs := agent.KnownAgentDefs()
+		if m.menuCursor >= 0 && m.menuCursor < len(defs) {
+			if err := agent.SaveAgentChoice(defs[m.menuCursor].ID); err != nil {
+				m.statusLines = []string{fmt.Sprintf("Failed to save config: %v", err)}
+			} else {
+				m.statusLines = []string{fmt.Sprintf("  ✓ Configured to use %s", defs[m.menuCursor].DisplayName)}
+			}
+		}
+		m.mode = modeNormal
+		return m, nil
+	case "esc", "ctrl+c", "q":
+		m.quitting = true
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -421,6 +453,24 @@ func (m TUIModel) View() string {
 		styles.HeaderKeyStyle.Render("Repo:"), styles.HeaderValStyle.Render(m.repoRoot),
 		styles.HeaderKeyStyle.Render("Source:"), styles.RenderBranch(srcBranch)))
 
+	if m.mode == modeAgentSetup {
+		b.WriteString(styles.TitleStyle.Render(m.menuTitle))
+		b.WriteString("\n\n")
+		for i, opt := range m.menuOptions {
+			cursor := "  "
+			style := styles.PickerNormalStyle
+			if i == m.menuCursor {
+				cursor = styles.PickerCursorStyle.Render("▸ ")
+				style = styles.PickerSelectedStyle
+			}
+			b.WriteString(cursor + style.Render(opt) + "\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(styles.PickerHintStyle.Render("  j/k navigate · enter select · esc quit"))
+		b.WriteString("\n")
+		return b.String()
+	}
+
 	if len(m.agents) == 0 {
 		b.WriteString(styles.LabelStyle.Render("  No agents running.\n"))
 	} else {
@@ -514,6 +564,17 @@ func RunInteractiveTUI(
 		width:         100,
 		spinner:       s,
 		actionHandler: tuiActionHandler(repoRoot),
+	}
+	if !agent.IsConfigured() {
+		defs := agent.KnownAgentDefs()
+		var options []string
+		for _, d := range defs {
+			options = append(options, d.DisplayName)
+		}
+		m.mode = modeAgentSetup
+		m.menuTitle = "No agent CLI configured — select one:"
+		m.menuOptions = options
+		m.menuCursor = 0
 	}
 	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
