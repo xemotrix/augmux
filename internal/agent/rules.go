@@ -44,6 +44,47 @@ func BuildCursorMDC(rulesContent string) string {
 	return fmt.Sprintf("---\ndescription: augmux agent rules\nalwaysApply: true\n---\n%s", rulesContent)
 }
 
+// RebaseCommandTemplate is the Cursor slash command prompt for /augmux-rebase.
+// Placeholder: {{SOURCE_BRANCH}}
+const RebaseCommandTemplate = `Rebase your current branch onto the latest ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch).
+
+Follow these steps exactly:
+
+1. **Commit uncommitted work.** If there are any uncommitted changes, stage and commit them:
+` + "   ```" + `
+   git add -A && git commit -m "augmux: auto-commit before rebase"
+` + "   ```" + `
+
+2. **Start the rebase:**
+` + "   ```" + `
+   git rebase {{SOURCE_BRANCH}}
+` + "   ```" + `
+
+3. **If the rebase succeeds with no conflicts**, you are done.
+
+4. **If there are conflicts**, for each conflicted file:
+   - Open the file and look for conflict markers (` + "`<<<<<<<`" + `, ` + "`=======`" + `, ` + "`>>>>>>>`" + `).
+   - Resolve by integrating **both** sides: keep the new features from ` + "`{{SOURCE_BRANCH}}`" + ` AND your own changes. Do not discard either side.
+   - Stage the resolved file:
+` + "     ```" + `
+     git add <file>
+` + "     ```" + `
+   - Continue the rebase:
+` + "     ```" + `
+     GIT_EDITOR=true git rebase --continue
+` + "     ```" + `
+   - If more conflicts appear, repeat this step.
+
+5. After the rebase completes, verify the build still works and your changes are intact.
+
+Do NOT use ` + "`git rebase --abort`" + ` unless you truly cannot resolve a conflict. Do NOT push to any remote.
+`
+
+// BuildRebaseCommand renders the rebase command template for the given source branch.
+func BuildRebaseCommand(sourceBranch string) string {
+	return strings.Replace(RebaseCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+}
+
 // SpawnCmdWithRules returns the shell command to start the agent with a rules file.
 // For agents that don't support rules, it falls back to the plain command.
 func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {

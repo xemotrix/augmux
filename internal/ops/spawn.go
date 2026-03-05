@@ -53,12 +53,17 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
-	// For Cursor, inject rules via .cursor/rules/ in the worktree.
+	// For Cursor, inject rules and commands via .cursor/ in the worktree.
 	if ag.ID == "cursor" {
 		cursorRulesDir := filepath.Join(wtPath, ".cursor", "rules")
 		os.MkdirAll(cursorRulesDir, 0o755)
 		mdcContent := agent.BuildCursorMDC(rulesContent)
 		core.WriteFileContent(filepath.Join(cursorRulesDir, "augmux.mdc"), mdcContent)
+
+		cursorCmdsDir := filepath.Join(wtPath, ".cursor", "commands")
+		os.MkdirAll(cursorCmdsDir, 0o755)
+		rebaseCmd := agent.BuildRebaseCommand(srcBranch)
+		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-rebase.md"), rebaseCmd)
 
 		gitignorePath := filepath.Join(wtPath, ".gitignore")
 		appendToGitignore(gitignorePath, ".cursor/")
