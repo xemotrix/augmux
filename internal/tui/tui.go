@@ -85,7 +85,7 @@ type TUIModel struct {
 	mode          tuiMode
 	spinner       spinner.Model
 	textInput     textinput.Model                      // for spawn
-	statusLines   []string                             // output from last action
+	toaster       toaster                              // toast notifications
 	actionHandler func(TUIResult, string) ActionResult // returns action result
 	menuTitle     string                               // inline menu title
 	menuOptions   []string                             // inline menu options
@@ -155,19 +155,32 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
+	case addToastMsg, toastExpiredMsg:
+		var cmd tea.Cmd
+		m.toaster, cmd = m.toaster.Update(msg)
+		return m, cmd
+
 	case actionResultMsg:
 		switch v := msg.result.(type) {
 		case ActionDone:
-			m.statusLines = v.Lines
 			m.refreshAgents()
+			var cmds []tea.Cmd
+			for _, line := range v.Lines {
+				cmds = append(cmds, AddToast(line, ToastInfo))
+			}
+			return m, tea.Batch(cmds...)
 		case MenuRequest:
 			m.mode = modeMenu
 			m.menuTitle = v.Title
 			m.menuOptions = v.Options
 			m.menuCursor = 0
 			m.menuCallback = v.Callback
-			m.statusLines = v.Lines
 			m.refreshAgents()
+			var cmds []tea.Cmd
+			for _, line := range v.Lines {
+				cmds = append(cmds, AddToast(line, ToastInfo))
+			}
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 
@@ -180,10 +193,6 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case modeMenu:
 			return m.updateMenu(msg)
 		default:
-			// Normal mode — clear status on any key if showing status
-			if len(m.statusLines) > 0 {
-				m.statusLines = nil
-			}
 			return m.updateNormal(msg)
 		}
 	}
@@ -213,14 +222,11 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		name := strings.TrimSpace(m.textInput.Value())
 		m.mode = modeNormal
 		if name == "" {
-			m.statusLines = []string{"Empty name — spawn aborted."}
-			return m, nil
+			return m, AddToast("Empty name — spawn aborted.", ToastWarning)
 		}
 		if err := validateAgentName(name); err != nil {
-			m.statusLines = []string{"Invalid name: " + err.Error()}
-			return m, nil
+			return m, AddToast("Invalid name: "+err.Error(), ToastWarning)
 		}
-		// Run spawn with captured output
 		agentIdx := -1
 		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
 		handler := m.actionHandler
@@ -229,8 +235,7 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "esc", "ctrl+c":
 		m.mode = modeNormal
-		m.statusLines = []string{"Spawn cancelled."}
-		return m, nil
+		return m, AddToast("Spawn cancelled.", ToastInfo)
 	}
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
@@ -251,14 +256,12 @@ func (m TUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		cb := m.menuCallback
 		cursor := m.menuCursor
-		m.statusLines = nil
 		return m, func() tea.Msg {
 			return actionResultMsg{result: cb(cursor)}
 		}
 	case "esc", "ctrl+c":
 		m.mode = modeNormal
 		cb := m.menuCallback
-		m.statusLines = nil
 		return m, func() tea.Msg {
 			return actionResultMsg{result: cb(-1)}
 		}
@@ -278,14 +281,13 @@ func (m TUIModel) updateAgentSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		defs := agent.KnownAgentDefs()
+		m.mode = modeNormal
 		if m.menuCursor >= 0 && m.menuCursor < len(defs) {
 			if err := agent.SaveAgentChoice(defs[m.menuCursor].ID); err != nil {
-				m.statusLines = []string{fmt.Sprintf("Failed to save config: %v", err)}
-			} else {
-				m.statusLines = []string{fmt.Sprintf("  ✓ Configured to use %s", defs[m.menuCursor].DisplayName)}
+				return m, AddToast(fmt.Sprintf("Failed to save config: %v", err), ToastError)
 			}
+			return m, AddToast(fmt.Sprintf("Configured to use %s", defs[m.menuCursor].DisplayName), ToastSuccess)
 		}
-		m.mode = modeNormal
 		return m, nil
 	case "esc", "ctrl+c", "q":
 		m.quitting = true
@@ -354,7 +356,6 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ti.TextStyle = styles.PickerSelectedStyle
 		m.textInput = ti
 		m.mode = modeSpawning
-		m.statusLines = nil
 		return m, textinput.Blink
 	case "m":
 		if isWip && hasCommits {
@@ -527,13 +528,8 @@ func (m TUIModel) View() string {
 
 	sections = append(sections, "")
 
-	if len(m.statusLines) > 0 {
-		statusStyle := lipgloss.NewStyle().Foreground(styles.ColorGreen)
-		var lines []string
-		for _, line := range m.statusLines {
-			lines = append(lines, statusStyle.Render(line))
-		}
-		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, lines...), "")
+	if toastView := m.toaster.View(); toastView != "" {
+		sections = append(sections, toastView, "")
 	}
 
 	if m.mode == modeSpawning {
@@ -555,9 +551,17 @@ func (m TUIModel) View() string {
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	sections = append(sections, renderActionBar(selected, m.repoRoot), "")
+	bar := renderActionBar(selected, m.repoRoot)
 
-	return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	contentHeight := lipgloss.Height(content)
+	barHeight := 2 // action bar + 1 line bottom padding
+	gap := m.height - contentHeight - barHeight
+	if gap > 0 {
+		content = content + strings.Repeat("\n", gap)
+	}
+
+	return outerPad.Render(content + "\n" + bar)
 }
 
 // RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
@@ -580,6 +584,7 @@ func RunInteractiveTUI(
 		repoRoot:      repoRoot,
 		width:         100,
 		spinner:       s,
+		toaster:       newToaster(),
 		actionHandler: tuiActionHandler(repoRoot),
 	}
 	if !agent.IsConfigured() {
@@ -602,10 +607,15 @@ func RunInteractiveTUI(
 
 func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 	return func(result TUIResult, spawnName string) ActionResult {
-		// All ops output is discarded — the TUI refreshes agent state
-		// automatically, so no feedback text is needed.
 		var sink bytes.Buffer
 		idx := result.AgentIdx
+
+		agentLabel := fmt.Sprintf("agent %d", idx)
+		if idx >= 0 {
+			if ag, err := core.ReadAgent(repoRoot, idx); err == nil && ag.Description != "" {
+				agentLabel = fmt.Sprintf("%q", ag.Description)
+			}
+		}
 
 		switch result.Action {
 		case ActionMerge:
@@ -620,7 +630,6 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 						},
 						Callback: func(choice int) ActionResult {
 							var sink2 bytes.Buffer
-							// Remap choice: 0=continue, 1=abort (maps to default in ResolveConflict)
 							if choice == 1 {
 								choice = -1
 							}
@@ -629,6 +638,7 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 						},
 					}
 				}
+				return ActionDone{Lines: []string{fmt.Sprintf("Merged %s", agentLabel)}}
 			}
 
 		case ActionSpawn:
@@ -637,11 +647,13 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 		case ActionAccept:
 			if idx >= 0 {
 				ops.AcceptOne(&sink, repoRoot, idx)
+				return ActionDone{Lines: []string{fmt.Sprintf("Accepted %s", agentLabel)}}
 			}
 
 		case ActionReject:
 			if idx >= 0 {
 				ops.RejectOne(&sink, repoRoot, idx)
+				return ActionDone{Lines: []string{fmt.Sprintf("Rejected %s", agentLabel)}}
 			}
 
 		case ActionCancel:

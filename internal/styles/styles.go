@@ -37,6 +37,12 @@ var (
 	PickerNormalStyle   = lipgloss.NewStyle().Foreground(ColorGray)
 	PickerHintStyle     = lipgloss.NewStyle().Foreground(ColorDimGray).Italic(true)
 
+	// Toast notifications
+	ToastInfo    = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
+	ToastSuccess = lipgloss.NewStyle().Foreground(ColorGreen).Bold(true)
+	ToastWarning = lipgloss.NewStyle().Foreground(ColorYellow).Bold(true)
+	ToastError   = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
+
 	// Separator
 	SeparatorStyle = lipgloss.NewStyle().Foreground(ColorDimGray)
 
