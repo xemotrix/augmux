@@ -16,9 +16,12 @@ type inputModel struct {
 	quitting  bool
 }
 
-func newInputModel(prompt string) inputModel {
+func newInputModel(
+	prompt string,
+	placeholder string,
+) inputModel {
 	ti := textinput.New()
-	ti.Placeholder = "e.g. fix auth bug"
+	ti.Placeholder = placeholder
 	ti.Focus()
 	ti.CharLimit = 80
 	ti.Width = 50
@@ -64,8 +67,8 @@ func (m inputModel) View() string {
 }
 
 // RunTextInput shows a text input prompt and returns the entered value, or "" if cancelled.
-func RunTextInput(prompt string) string {
-	m := newInputModel(prompt)
+func RunTextInput(prompt, placeholder string) string {
+	m := newInputModel(prompt, placeholder)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {

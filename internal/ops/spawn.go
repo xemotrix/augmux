@@ -74,7 +74,9 @@ func Spawn(w io.Writer, repoRoot string, args []string) {
 	}
 	ag := agent.ActiveAgent()
 	if len(args) == 0 {
-		name := components.RunTextInput("Task name for new agent:")
+		name := components.RunTextInput("Task name for new agent:",
+			"e.g. fix auth bug",
+		)
 		if name == "" {
 			fmt.Fprintln(w, "Empty name — aborting.")
 			return
@@ -100,4 +102,3 @@ func SpawnByName(w io.Writer, repoRoot string, name string) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Check status: augmux status")
 }
-
