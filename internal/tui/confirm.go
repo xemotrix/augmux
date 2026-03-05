@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
@@ -65,10 +63,8 @@ func (m confirmModel) View() string {
 	if m.quitting {
 		return ""
 	}
-	var b strings.Builder
 
-	b.WriteString(confirmWarningStyle.Render("⚠ " + m.message))
-	b.WriteString("\n\n")
+	warning := confirmWarningStyle.Render("⚠ " + m.message)
 
 	yes := confirmInactiveStyle.Render("Yes")
 	no := confirmInactiveStyle.Render("No")
@@ -78,13 +74,15 @@ func (m confirmModel) View() string {
 		no = confirmActiveStyle.Render("No")
 	}
 
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yes, "    ", no)
-	b.WriteString(lipgloss.PlaceHorizontal(60, lipgloss.Center, buttons))
-	b.WriteString("\n\n")
-	b.WriteString(styles.PickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel"))
-	b.WriteString("\n")
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center,
+		yes,
+		lipgloss.NewStyle().Width(4).Render(""),
+		no,
+	)
+	buttonRow := lipgloss.PlaceHorizontal(60, lipgloss.Center, buttons)
+	hint := styles.PickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel")
 
-	return b.String()
+	return lipgloss.JoinVertical(lipgloss.Left, warning, "", buttonRow, "", hint, "")
 }
 
 // RunConfirm shows a yes/no confirmation dialog. Returns true if confirmed.

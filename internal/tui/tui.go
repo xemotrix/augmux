@@ -388,7 +388,6 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	isMerged := a != nil && a.MergeCommit != ""
 	isResolving := a != nil && a.Resolving != ""
 
-	// Check if agent has commits ahead of source branch
 	hasCommits := false
 	if a != nil && repoRoot != "" {
 		srcBranch := core.SourceBranch(repoRoot)
@@ -401,12 +400,12 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	hasAgent := a != nil
 
 	actions := []action{
-		{"enter:focus", hasAgent},           // focus agent window
-		{"spawn", true},                     // always available
-		{"merge", isWip && hasCommits},      // wip agents with commits only
-		{"accept", isMerged},                // merged agents only
-		{"reject", isMerged || isResolving}, // merged or resolving
-		{"cancel", isWip || isResolving},    // wip or resolving
+		{"enter:focus", hasAgent},
+		{"spawn", true},
+		{"merge", isWip && hasCommits},
+		{"accept", isMerged},
+		{"reject", isMerged || isResolving},
+		{"cancel", isWip || isResolving},
 	}
 
 	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorAccent)
@@ -415,17 +414,23 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	sepStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
 
 	var parts []string
-	for _, act := range actions {
+	for i, act := range actions {
+		if i > 0 {
+			parts = append(parts, sepStyle.Render(" · "))
+		}
 		if act.enabled {
 			if idx := strings.Index(act.name, ":"); idx >= 0 {
-				// "key:label" format — highlight the key portion
 				key := act.name[:idx]
 				label := act.name[idx+1:]
-				parts = append(parts, accentStyle.Render(key)+" "+enabledStyle.Render(label))
+				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
+					accentStyle.Render(key),
+					enabledStyle.Render(" "+label),
+				))
 			} else {
-				first := accentStyle.Render(string(act.name[0]))
-				rest := enabledStyle.Render(act.name[1:])
-				parts = append(parts, first+rest)
+				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
+					accentStyle.Render(string(act.name[0])),
+					enabledStyle.Render(act.name[1:]),
+				))
 			}
 		} else {
 			name := act.name
@@ -436,26 +441,28 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 		}
 	}
 
-	return "  " + strings.Join(parts, sepStyle.Render(" · "))
+	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+	return lipgloss.NewStyle().PaddingLeft(2).Render(bar)
 }
 
 func renderMenu(title string, options []string, cursor int, hint string) string {
-	var b strings.Builder
-	b.WriteString(styles.TitleStyle.Render(title))
-	b.WriteString("\n\n")
+	titleLine := styles.TitleStyle.Render(title)
+
+	var items []string
 	for i, opt := range options {
-		cur := "  "
+		cur := lipgloss.NewStyle().Width(2).Render("")
 		style := styles.PickerNormalStyle
 		if i == cursor {
 			cur = styles.PickerCursorStyle.Render("▸ ")
 			style = styles.PickerSelectedStyle
 		}
-		b.WriteString(cur + style.Render(opt) + "\n")
+		items = append(items, lipgloss.JoinHorizontal(lipgloss.Top, cur, style.Render(opt)))
 	}
-	b.WriteString("\n")
-	b.WriteString(styles.PickerHintStyle.Render("  " + hint))
-	b.WriteString("\n")
-	return b.String()
+	optionsList := lipgloss.JoinVertical(lipgloss.Left, items...)
+
+	hintLine := styles.PickerHintStyle.PaddingLeft(2).Render(hint)
+
+	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", optionsList, "", hintLine, "")
 }
 
 func (m TUIModel) View() string {
@@ -464,22 +471,29 @@ func (m TUIModel) View() string {
 	}
 
 	srcBranch := core.SourceBranch(m.repoRoot)
-	var b strings.Builder
 
-	b.WriteString(styles.TitleStyle.Render("  \uebc8 augmux session"))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
-		styles.HeaderKeyStyle.Render("Repo:"), styles.HeaderValStyle.Render(m.repoRoot),
-		styles.HeaderKeyStyle.Render("Source:"), styles.RenderBranch(srcBranch)))
+	title := styles.TitleStyle.PaddingLeft(2).Render("\uebc8 augmux session")
+
+	header := lipgloss.JoinHorizontal(lipgloss.Center,
+		styles.HeaderKeyStyle.Render("Repo:"),
+		styles.HeaderValStyle.Render(" "+m.repoRoot+"   "),
+		styles.HeaderKeyStyle.Render("Source:"),
+		lipgloss.NewStyle().Render(" "),
+		styles.RenderBranch(srcBranch),
+	)
+	header = lipgloss.NewStyle().PaddingLeft(2).Render(header)
+
+	sections := []string{title, header, ""}
 
 	if m.mode == modeAgentSetup {
-		b.WriteString(renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
-			"j/k navigate · enter select · esc quit"))
-		return b.String()
+		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
+			"j/k navigate · enter select · esc quit")
+		sections = append(sections, menu)
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
 	if len(m.agents) == 0 {
-		b.WriteString(styles.LabelStyle.Render("  No agents running.\n"))
+		sections = append(sections, styles.LabelStyle.PaddingLeft(2).Render("No agents running."))
 	} else {
 		spinnerFrame := m.spinner.View()
 		var cards []string
@@ -495,47 +509,42 @@ func (m TUIModel) View() string {
 			row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
 			rows = append(rows, row)
 		}
-		b.WriteString(lipgloss.JoinVertical(lipgloss.Left, rows...))
+		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, rows...))
 	}
-	b.WriteString("\n\n")
 
-	// Show status lines from last action
+	sections = append(sections, "")
+
 	if len(m.statusLines) > 0 {
 		statusStyle := lipgloss.NewStyle().Foreground(styles.ColorGreen)
+		var lines []string
 		for _, line := range m.statusLines {
-			b.WriteString(statusStyle.Render(line))
-			b.WriteString("\n")
+			lines = append(lines, statusStyle.Render(line))
 		}
-		b.WriteString("\n")
+		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, lines...), "")
 	}
 
-	// Show text input for spawn mode
 	if m.mode == modeSpawning {
-		b.WriteString(styles.TitleStyle.Render("Task name for new agent:"))
-		b.WriteString("\n\n")
-		b.WriteString("  " + m.textInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(styles.PickerHintStyle.Render("  enter confirm · esc cancel"))
-		b.WriteString("\n")
-		return b.String()
+		spawnTitle := styles.TitleStyle.Render("Task name for new agent:")
+		inputLine := lipgloss.NewStyle().PaddingLeft(2).Render(m.textInput.View())
+		hint := styles.PickerHintStyle.PaddingLeft(2).Render("enter confirm · esc cancel")
+		sections = append(sections, spawnTitle, "", inputLine, "", hint, "")
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
-	// Show inline menu
 	if m.mode == modeMenu {
-		b.WriteString(renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
-			"j/k navigate · enter select · esc cancel"))
-		return b.String()
+		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
+			"j/k navigate · enter select · esc cancel")
+		sections = append(sections, menu)
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
-	// Action bar based on selected agent
 	var selected *core.AgentState
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	b.WriteString(renderActionBar(selected, m.repoRoot))
-	b.WriteString("\n")
+	sections = append(sections, renderActionBar(selected, m.repoRoot), "")
 
-	return b.String()
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
 // RunInteractiveTUI runs the interactive TUI. actionHandler is called when the

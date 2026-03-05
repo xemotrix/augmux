@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -128,19 +127,21 @@ func (m taskPickerModel) View() string {
 	if m.quitting {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(styles.TitleStyle.Render(m.title))
-	b.WriteString("\n\n")
 
+	titleLine := styles.TitleStyle.Render(m.title)
+
+	sep := styles.SeparatorStyle.Render(" │ ")
+
+	var rows []string
 	for i, item := range m.items {
 		isCursor := i == m.cursor
 		isChecked := m.checked[i]
 
-		cursor := "  "
+		cursor := lipgloss.NewStyle().Width(2).Render("")
 		if isCursor {
 			cursor = styles.PickerCursorStyle.Render("▸ ")
 		}
-		check := "[ ] "
+		check := lipgloss.NewStyle().Render("[ ] ")
 		if isChecked {
 			check = styles.PickerCursorStyle.Render("[x] ")
 		}
@@ -155,14 +156,16 @@ func (m taskPickerModel) View() string {
 		dirty := styles.DirtyStyle.Width(m.colWidths[3]).Render(item.cols[3])
 		branch := styles.RenderBranch(item.cols[4])
 
-		sep := styles.SeparatorStyle.Render(" │ ")
-		b.WriteString(cursor + check + name + sep + status + sep + commits + sep + dirty + sep + branch + "\n")
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			cursor, check, name, sep, status, sep, commits, sep, dirty, sep, branch,
+		)
+		rows = append(rows, row)
 	}
 
-	b.WriteString("\n")
-	b.WriteString(styles.PickerHintStyle.Render("j/k navigate · g/G top/bottom · space/x toggle · a all · enter confirm · esc cancel"))
-	b.WriteString("\n")
-	return b.String()
+	itemList := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	hint := styles.PickerHintStyle.Render("j/k navigate · g/G top/bottom · space/x toggle · a all · enter confirm · esc cancel")
+
+	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", itemList, "", hint, "")
 }
 
 // RunPicker shows a multi-select picker and returns selected agent indices (nil if cancelled).

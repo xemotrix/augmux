@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
@@ -56,14 +57,13 @@ func (m inputModel) View() string {
 	if m.quitting {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(styles.TitleStyle.Render(m.prompt))
-	b.WriteString("\n\n")
-	b.WriteString("  " + m.textInput.View())
-	b.WriteString("\n\n")
-	b.WriteString(styles.PickerHintStyle.Render("  enter confirm · esc/ctrl+c cancel"))
-	b.WriteString("\n")
-	return b.String()
+	indent := lipgloss.NewStyle().PaddingLeft(2)
+
+	titleLine := styles.TitleStyle.Render(m.prompt)
+	inputLine := indent.Render(m.textInput.View())
+	hint := styles.PickerHintStyle.PaddingLeft(2).Render("enter confirm · esc/ctrl+c cancel")
+
+	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", inputLine, "", hint, "")
 }
 
 // RunTextInput shows a text input prompt and returns the entered value, or "" if cancelled.

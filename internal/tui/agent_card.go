@@ -47,10 +47,15 @@ func RunAgentCard(
 	topRight := border.Top + border.TopRight
 	used := lipgloss.Width(topLeft) + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + lipgloss.Width(topRight)
 	fill := max(cardWidth-used, 1)
-	topLine := bdr.Render(topLeft) + idStyled +
-		bdr.Render(strings.Repeat(border.Top, fill)) +
-		" " + statusStyled + " " +
-		bdr.Render(topRight)
+	topLine := lipgloss.JoinHorizontal(lipgloss.Top,
+		bdr.Render(topLeft),
+		idStyled,
+		bdr.Render(strings.Repeat(border.Top, fill)),
+		lipgloss.NewStyle().Render(" "),
+		statusStyled,
+		lipgloss.NewStyle().Render(" "),
+		bdr.Render(topRight),
+	)
 
 	// Card body — lipgloss handles side borders, bottom border, and padding.
 	bodyStyle := lipgloss.NewStyle().
@@ -59,30 +64,33 @@ func RunAgentCard(
 		Width(cardInner).
 		Padding(0, 1)
 
-	// Row 1: description (left) + activity indicator (right)
+	// Row 1: description (left-aligned) + activity indicator (right-aligned)
 	activityStr := activityIndicator(a, spinnerFrame)
 	activityWidth := lipgloss.Width(activityRawStr(a))
 	maxName := max(textWidth-activityWidth-1, 10)
 	nameLeft := lipgloss.NewStyle().
 		Width(textWidth - activityWidth).
 		Render(styles.ValueStyle.Render(truncate(a.Description, maxName)))
-	nameLine := nameLeft + activityStr
+	nameLine := lipgloss.JoinHorizontal(lipgloss.Top, nameLeft, activityStr)
 
-	// Row 2: branch (left) + commits ahead / dirty count (right)
+	// Row 2: branch (left-aligned) + commits ahead / dirty count (right-aligned)
 	aheadStr := ahead + " ↑"
 	dirty := countUncommitted(a.Worktree)
 	dirtyStr := fmt.Sprintf("%d ✎", dirty)
-	rightInfo := styles.AheadStyle.Render(aheadStr) + "  " + styles.DirtyStyle.Render(dirtyStr)
-	rightInfoWidth := lipgloss.Width(aheadStr + "  " + dirtyStr)
+	rightInfo := lipgloss.JoinHorizontal(lipgloss.Top,
+		styles.AheadStyle.MarginRight(2).Render(aheadStr),
+		styles.DirtyStyle.Render(dirtyStr),
+	)
+	rightInfoWidth := lipgloss.Width(aheadStr) + 2 + lipgloss.Width(dirtyStr)
 	iconWidth := 2
 	maxBranch := textWidth - rightInfoWidth - 1 - iconWidth
 	branchLeft := lipgloss.NewStyle().
 		Width(textWidth - rightInfoWidth).
 		Render(styles.RenderBranch(truncate(a.Branch, maxBranch)))
-	branchLine := branchLeft + rightInfo
+	branchLine := lipgloss.JoinHorizontal(lipgloss.Top, branchLeft, rightInfo)
 
 	body := lipgloss.JoinVertical(lipgloss.Left, nameLine, branchLine)
-	return topLine + "\n" + bodyStyle.Render(body)
+	return lipgloss.JoinVertical(lipgloss.Left, topLine, bodyStyle.Render(body))
 }
 
 func activityIndicator(a *core.AgentState, spinnerFrame string) string {
@@ -101,22 +109,21 @@ func activityRawStr(a *core.AgentState) string {
 
 func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
-		return styles.ColorCyan // merged
+		return styles.ColorCyan
 	}
 	if a.Resolving != "" {
-		return styles.ColorRed // resolving conflicts
+		return styles.ColorRed
 	}
 	if a.HasConflicts {
-		return styles.ColorRed // would conflict if merged
+		return styles.ColorRed
 	}
 	if a.Activity == core.ActivityWorking {
-		return styles.ColorYellow // working
+		return styles.ColorYellow
 	}
-	// idle
 	if commitsAhead > 0 {
-		return styles.ColorGreen // idle, some commits
+		return styles.ColorGreen
 	}
-	return styles.ColorDimGray // idle, no commits
+	return styles.ColorDimGray
 }
 
 func truncate(s string, n int) string {

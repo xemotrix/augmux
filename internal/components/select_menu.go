@@ -1,9 +1,8 @@
 package components
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
@@ -54,24 +53,24 @@ func (m selectMenuModel) View() string {
 	if m.quit {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(styles.TitleStyle.Render(m.title))
-	b.WriteString("\n\n")
 
+	titleLine := styles.TitleStyle.Render(m.title)
+
+	var items []string
 	for i, opt := range m.options {
-		cursor := "  "
+		cur := lipgloss.NewStyle().Width(2).Render("")
 		style := styles.PickerNormalStyle
 		if i == m.cursor {
-			cursor = styles.PickerCursorStyle.Render("▸ ")
+			cur = styles.PickerCursorStyle.Render("▸ ")
 			style = styles.PickerSelectedStyle
 		}
-		b.WriteString(cursor + style.Render(opt) + "\n")
+		items = append(items, lipgloss.JoinHorizontal(lipgloss.Top, cur, style.Render(opt)))
 	}
+	optionsList := lipgloss.JoinVertical(lipgloss.Left, items...)
 
-	b.WriteString("\n")
-	b.WriteString(styles.PickerHintStyle.Render("j/k navigate · enter select · esc cancel"))
-	b.WriteString("\n")
-	return b.String()
+	hint := styles.PickerHintStyle.Render("j/k navigate · enter select · esc cancel")
+
+	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", optionsList, "", hint, "")
 }
 
 // RunSelectMenu shows a single-select menu and returns the chosen index, or -1 if cancelled.
