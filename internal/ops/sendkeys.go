@@ -32,5 +32,8 @@ func SendRebase(repoRoot string, idx int) error {
 			srcBranch, srcBranch)
 	}
 
-	return core.TmuxRun("send-keys", "-t", ag.Window, cmd, "Enter")
+	if err := core.TmuxRun("send-keys", "-t", ag.Window, "-l", cmd); err != nil {
+		return err
+	}
+	return core.TmuxRun("send-keys", "-t", ag.Window, "Escape", "Enter")
 }
