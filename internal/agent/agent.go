@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
@@ -18,7 +16,6 @@ type AgentDef struct {
 	ID          string // unique key, e.g. "auggie"
 	DisplayName string // shown in picker, e.g. "Auggie (Augment Code)"
 	Command     string // binary name, e.g. "auggie"
-	InlineFlag  string // flag to pass inline prompt text, e.g. "--print"
 }
 
 // knownAgents is the registry of supported agent CLIs.
@@ -28,13 +25,11 @@ var knownAgents = []AgentDef{
 		ID:          "auggie",
 		DisplayName: "Auggie (Augment Code)",
 		Command:     "auggie",
-		InlineFlag:  "--print",
 	},
 	{
 		ID:          "cursor",
 		DisplayName: "Cursor (Cursor AI)",
 		Command:     "agent",
-		InlineFlag:  "-p",
 	},
 }
 
@@ -135,23 +130,3 @@ func ActiveAgent() *AgentDef {
 	return promptAgentSetup()
 }
 
-// --- Command builders: all agent CLI coupling lives here ---
-
-// RunInline runs the agent synchronously with an inline prompt, attaching
-// stdout/stderr to the terminal. Returns any error.
-func (a *AgentDef) RunInline(dir, promptText string) error {
-	args := []string{a.InlineFlag, promptText}
-	if a.ID == "cursor" {
-		// Cursor print mode: agent -p --force "prompt"
-		args = []string{a.InlineFlag, "--force", promptText}
-	}
-	cmd := exec.Command(a.Command, args...)
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func (a *AgentDef) Label() string {
-	return strings.Split(a.DisplayName, " (")[0] // e.g. "Auggie"
-}

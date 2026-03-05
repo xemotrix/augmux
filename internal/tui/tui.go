@@ -14,15 +14,13 @@ import (
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/ops"
 	"github.com/xemotrix/augmux/internal/styles"
-	// "github.com/xemotrix/augmux/internal/tui"
 )
 
 // TUIAction represents an action the user triggered from the interactive TUI.
 type TUIAction int
 
 const (
-	ActionNone TUIAction = iota
-	ActionSpawn
+	ActionSpawn TUIAction = iota
 	ActionMerge
 	ActionAccept
 	ActionReject
@@ -597,7 +595,7 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 		switch result.Action {
 		case ActionMerge:
 			if idx >= 0 {
-				err := ops.MergeOne(&sink, repoRoot, idx, ops.MergeTUI)
+				err := ops.MergeOne(&sink, repoRoot, idx)
 				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
 					return MenuRequest{
 						Title: fmt.Sprintf("Conflict merging agent %d — how to resolve?", idx),

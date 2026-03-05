@@ -126,6 +126,32 @@ func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalCol
 	return styles.ColorDimGray
 }
 
+func AgentStatusRaw(a *core.AgentState) string {
+	if a.MergeCommit != "" {
+		return "● merged"
+	}
+	if a.Resolving != "" {
+		return "● resolving"
+	}
+	if a.HasConflicts {
+		return "● conflicts"
+	}
+	return "● wip"
+}
+
+func AgentStatusStyled(a *core.AgentState, text string) string {
+	if a.MergeCommit != "" {
+		return styles.BadgeMerged.Render(text)
+	}
+	if a.Resolving != "" {
+		return styles.BadgeResolving.Render(text)
+	}
+	if a.HasConflicts {
+		return styles.BadgeConflicts.Render(text)
+	}
+	return styles.BadgeWip.Render(text)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

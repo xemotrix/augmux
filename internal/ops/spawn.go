@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/xemotrix/augmux/internal/agent"
-	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
 )
 
@@ -94,28 +93,7 @@ func appendToGitignore(path, entry string) {
 	f.WriteString(entry + "\n")
 }
 
-func Spawn(w io.Writer, repoRoot string, args []string) {
-	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(repoRoot); err != nil {
-		core.Fatal(err.Error())
-	}
-	ag := agent.ActiveAgent()
-	if len(args) == 0 {
-		name := components.RunTextInput("Task name for new agent:",
-			"e.g. fix auth bug",
-		)
-		if name == "" {
-			return
-		}
-		spawnOne(w, repoRoot, name, ag)
-	} else {
-		for _, name := range args {
-			spawnOne(w, repoRoot, name, ag)
-		}
-	}
-}
-
-// SpawnByName spawns a single agent with the given name (no interactive prompt).
+// SpawnByName spawns a single agent with the given name.
 func SpawnByName(w io.Writer, repoRoot string, name string) {
 	repoRoot = core.MustAbs(repoRoot)
 	if err := ensureSession(repoRoot); err != nil {

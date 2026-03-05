@@ -5,22 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
-)
-
-// MergeMode controls how MergeOne handles interactive decision points.
-type MergeMode int
-
-const (
-	// MergeInteractive shows tui.RunMenu prompts for conflicts and uncommitted
-	// changes. Used by the CLI commands (augmux merge).
-	MergeInteractive MergeMode = iota
-
-	// MergeTUI auto-commits uncommitted changes and returns *MergeConflictErr
-	// (without resetting the working tree) when conflicts are found, so the
-	// caller can show an inline menu inside the TUI.
-	MergeTUI
 )
 
 // MergeConflictErr is returned by MergeOne in MergeTUI mode when conflicts
@@ -38,7 +23,7 @@ func (e *MergeConflictErr) Error() string {
 	return "merge conflicts detected"
 }
 
-func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
+func MergeOne(w io.Writer, repoRoot string, idx int) error {
 	repoRoot = core.MustAbs(repoRoot)
 	td := core.TaskDir(repoRoot, idx)
 
@@ -67,26 +52,12 @@ func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 		return nil
 	}
 
-	// Check uncommitted changes in worktree
+	// Auto-commit uncommitted changes in worktree
 	if core.IsDir(ag.Worktree) {
 		porcelain := core.GitMust(ag.Worktree, "status", "--porcelain")
 		if porcelain != "" {
-			if mode == MergeInteractive {
-				choice := components.RunSelectMenu("Uncommitted changes — cannot merge", []string{
-					"Commit them now with a default message",
-					"Abort merge for this agent",
-				})
-				if choice == 0 {
-					core.GitMust(ag.Worktree, "add", "-A")
-					core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
-				} else {
-					return fmt.Errorf("aborted")
-				}
-			} else {
-				// MergeTUI: auto-commit uncommitted changes
-				core.GitMust(ag.Worktree, "add", "-A")
-				core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
-			}
+			core.GitMust(ag.Worktree, "add", "-A")
+			core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
 		}
 	}
 
@@ -114,27 +85,13 @@ func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 		}
 	}
 
-	// Conflict path
-	switch mode {
-	case MergeTUI:
-		// Return conflict info without resetting — caller shows inline menu.
-		files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-		return &MergeConflictErr{
-			RepoRoot:  repoRoot,
-			AgentIdx:  idx,
-			AgentDesc: ag.Description,
-			MergeMsg:  mergeMsg,
-			Files:     files,
-		}
-
-	default: // MergeInteractive
-		result := handleConflict(repoRoot)
-		switch result {
-		case conflictContinue:
-			core.WriteFileContent(td+"/resolving", mergeMsg)
-			return fmt.Errorf("resolving conflicts")
-		default:
-			return fmt.Errorf("aborted")
-		}
+	// Return conflict info without resetting — caller shows inline menu.
+	files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
+	return &MergeConflictErr{
+		RepoRoot:  repoRoot,
+		AgentIdx:  idx,
+		AgentDesc: ag.Description,
+		MergeMsg:  mergeMsg,
+		Files:     files,
 	}
 }

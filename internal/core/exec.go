@@ -73,4 +73,3 @@ func IsDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-
