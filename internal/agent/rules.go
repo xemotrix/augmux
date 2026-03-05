@@ -39,11 +39,19 @@ func BuildRules(task, branch, worktree, sourceBranch string) string {
 	return r.Replace(RulesTemplate)
 }
 
+// BuildCursorMDC wraps rules content in .mdc frontmatter for Cursor's .cursor/rules/ directory.
+func BuildCursorMDC(rulesContent string) string {
+	return fmt.Sprintf("---\ndescription: augmux agent rules\nalwaysApply: true\n---\n%s", rulesContent)
+}
+
 // SpawnCmdWithRules returns the shell command to start the agent with a rules file.
 // For agents that don't support rules, it falls back to the plain command.
 func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
 	if a.ID == "auggie" && rulesFile != "" {
 		return fmt.Sprintf("%s --rules '%s'", a.Command, rulesFile)
+	}
+	if a.ID == "cursor" {
+		return fmt.Sprintf("%s --yolo", a.Command)
 	}
 	return a.Command
 }

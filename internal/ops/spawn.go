@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xemotrix/augmux/internal/agent"
 	"github.com/xemotrix/augmux/internal/components"
@@ -53,6 +54,17 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
+	// For Cursor, inject rules via .cursor/rules/ in the worktree.
+	if ag.ID == "cursor" {
+		cursorRulesDir := filepath.Join(wtPath, ".cursor", "rules")
+		os.MkdirAll(cursorRulesDir, 0o755)
+		mdcContent := agent.BuildCursorMDC(rulesContent)
+		core.WriteFileContent(filepath.Join(cursorRulesDir, "augmux.mdc"), mdcContent)
+
+		gitignorePath := filepath.Join(wtPath, ".gitignore")
+		appendToGitignore(gitignorePath, ".cursor/")
+	}
+
 	winName := fmt.Sprintf("ax-%d-%s", idx, safe)
 	core.WriteFileContent(filepath.Join(td, "window"), winName)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
@@ -60,6 +72,26 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
+}
+
+// appendToGitignore adds an entry to a .gitignore file if it's not already present.
+func appendToGitignore(path, entry string) {
+	data, _ := os.ReadFile(path)
+	content := string(data)
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == entry {
+			return
+		}
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		f.WriteString("\n")
+	}
+	f.WriteString(entry + "\n")
 }
 
 func Spawn(w io.Writer, repoRoot string, args []string) {
