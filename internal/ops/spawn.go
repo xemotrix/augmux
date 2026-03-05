@@ -11,7 +11,7 @@ import (
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-func ensureSession(w io.Writer, repoRoot string) error {
+func ensureSession(repoRoot string) error {
 	sd := core.StateDir(repoRoot)
 	if core.IsDir(sd) {
 		return nil
@@ -24,7 +24,6 @@ func ensureSession(w io.Writer, repoRoot string) error {
 	os.MkdirAll(core.WorktreeBase(repoRoot), 0o755)
 	core.WriteFileContent(filepath.Join(sd, "source_branch"), branch)
 	core.WriteFileContent(filepath.Join(sd, "repo_root"), repoRoot)
-	fmt.Fprintf(w, "augmux session initialized (source branch: %s)\n", branch)
 	return nil
 }
 
@@ -61,15 +60,11 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
-
-	fmt.Fprintf(w, "  ✓ Agent %d: '%s' → branch %s\n", idx, name, branchName)
-	fmt.Fprintf(w, "    Window: %s\n", winName)
-	fmt.Fprintf(w, "    Worktree: %s\n", wtPath)
 }
 
 func Spawn(w io.Writer, repoRoot string, args []string) {
 	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(w, repoRoot); err != nil {
+	if err := ensureSession(repoRoot); err != nil {
 		core.Fatal(err.Error())
 	}
 	ag := agent.ActiveAgent()
@@ -78,7 +73,6 @@ func Spawn(w io.Writer, repoRoot string, args []string) {
 			"e.g. fix auth bug",
 		)
 		if name == "" {
-			fmt.Fprintln(w, "Empty name — aborting.")
 			return
 		}
 		spawnOne(w, repoRoot, name, ag)
@@ -87,18 +81,14 @@ func Spawn(w io.Writer, repoRoot string, args []string) {
 			spawnOne(w, repoRoot, name, ag)
 		}
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Check status: augmux status")
 }
 
 // SpawnByName spawns a single agent with the given name (no interactive prompt).
 func SpawnByName(w io.Writer, repoRoot string, name string) {
 	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(w, repoRoot); err != nil {
+	if err := ensureSession(repoRoot); err != nil {
 		core.Fatal(err.Error())
 	}
 	ag := agent.ActiveAgent()
 	spawnOne(w, repoRoot, name, ag)
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Check status: augmux status")
 }
