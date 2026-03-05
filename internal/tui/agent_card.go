@@ -16,7 +16,6 @@ func RunAgentCard(
 ) string {
 	sel := len(selected) > 0 && selected[0]
 
-	// Compute commits ahead early — needed for border styles.Color and branch line
 	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 	if ahead == "" {
 		ahead = "?"
@@ -25,64 +24,65 @@ func RunAgentCard(
 	fmt.Sscanf(ahead, "%d", &aheadNum)
 
 	borderColor := agentBorderColor(a, aheadNum)
+
+	var border lipgloss.Border
+	if sel {
+		border = lipgloss.DoubleBorder()
+	} else {
+		border = lipgloss.RoundedBorder()
+	}
+
 	bdr := lipgloss.NewStyle().Foreground(borderColor)
 	if sel {
 		bdr = bdr.Bold(true)
 	}
 
-	// Border characters: thicker (double-line) when selected
-	var cTL, cTR, cBL, cBR, cH, cV string
-	if sel {
-		cTL, cTR, cBL, cBR, cH, cV = "╔", "╗", "╚", "╝", "═", "║"
-	} else {
-		cTL, cTR, cBL, cBR, cH, cV = "╭", "╮", "╰", "╯", "─", "│"
-	}
-
+	// Top border — manually constructed to embed agent ID and status badge.
 	statusRaw := AgentStatusRaw(a)
 	statusStyled := AgentStatusStyled(a, statusRaw)
-
-	// Top border: ╭─❮3❯──────────────────────── ● wip ─╮
 	idLabel := fmt.Sprintf("❮%d❯", a.Index)
 	idStyled := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWhite).Render(idLabel)
 
-	// cardWidth - "╭─"(2) - idLabel - fill - " status "(1+statusRaw+1) - "─╮"(2)
-	used := 2 + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + 2
+	topLeft := border.TopLeft + border.Top
+	topRight := border.Top + border.TopRight
+	used := lipgloss.Width(topLeft) + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + lipgloss.Width(topRight)
 	fill := max(cardWidth-used, 1)
-	topLine := bdr.Render(cTL+cH) + idStyled +
-		bdr.Render(strings.Repeat(cH, fill)) +
+	topLine := bdr.Render(topLeft) + idStyled +
+		bdr.Render(strings.Repeat(border.Top, fill)) +
 		" " + statusStyled + " " +
-		bdr.Render(cH+cTR)
+		bdr.Render(topRight)
 
-	// Description line with activity indicator on the right
+	// Card body — lipgloss handles side borders, bottom border, and padding.
+	bodyStyle := lipgloss.NewStyle().
+		Border(border, false, true, true, true).
+		BorderForeground(borderColor).
+		Width(cardInner).
+		Padding(0, 1)
+
+	// Row 1: description (left) + activity indicator (right)
 	activityStr := activityIndicator(a, spinnerFrame)
-	activityRaw := activityRawStr(a)
-	maxName := max(textWidth-lipgloss.Width(activityRaw)-1, 10)
-	name := truncate(a.Description, maxName)
-	namePad := max(textWidth-lipgloss.Width(name)-lipgloss.Width(activityRaw), 1)
-	nameLine := bdr.Render(cV) + " " + styles.ValueStyle.Render(name) +
-		strings.Repeat(" ", namePad) + activityStr + " " + bdr.Render(cV)
+	activityWidth := lipgloss.Width(activityRawStr(a))
+	maxName := max(textWidth-activityWidth-1, 10)
+	nameLeft := lipgloss.NewStyle().
+		Width(textWidth - activityWidth).
+		Render(styles.ValueStyle.Render(truncate(a.Description, maxName)))
+	nameLine := nameLeft + activityStr
 
-	// Branch line
+	// Row 2: branch (left) + commits ahead / dirty count (right)
 	aheadStr := ahead + " ↑"
-
-	// Count uncommitted changes in the worktree
 	dirty := countUncommitted(a.Worktree)
 	dirtyStr := fmt.Sprintf("%d ✎", dirty)
+	rightInfo := styles.AheadStyle.Render(aheadStr) + "  " + styles.DirtyStyle.Render(dirtyStr)
+	rightInfoWidth := lipgloss.Width(aheadStr + "  " + dirtyStr)
+	iconWidth := 2
+	maxBranch := textWidth - rightInfoWidth - 1 - iconWidth
+	branchLeft := lipgloss.NewStyle().
+		Width(textWidth - rightInfoWidth).
+		Render(styles.RenderBranch(truncate(a.Branch, maxBranch)))
+	branchLine := branchLeft + rightInfo
 
-	rightInfo := aheadStr + "  " + dirtyStr
-	iconWidth := 2 // branchIcon + space
-	maxBranch := textWidth - lipgloss.Width(rightInfo) - 1 - iconWidth
-	branch := truncate(a.Branch, maxBranch)
-	branchGap := max(textWidth-lipgloss.Width(branch)-iconWidth-lipgloss.Width(rightInfo), 1)
-	branchLine := bdr.Render(cV) + " " + styles.RenderBranch(branch) +
-		strings.Repeat(" ", branchGap) +
-		styles.AheadStyle.Render(aheadStr) + "  " + styles.DirtyStyle.Render(dirtyStr) +
-		" " + bdr.Render(cV)
-
-	// Bottom border
-	bottomLine := bdr.Render(cBL + strings.Repeat(cH, cardWidth-2) + cBR)
-
-	return topLine + "\n" + nameLine + "\n" + branchLine + "\n" + bottomLine
+	body := lipgloss.JoinVertical(lipgloss.Left, nameLine, branchLine)
+	return topLine + "\n" + bodyStyle.Render(body)
 }
 
 func activityIndicator(a *core.AgentState, spinnerFrame string) string {

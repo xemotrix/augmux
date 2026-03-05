@@ -439,6 +439,25 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	return "  " + strings.Join(parts, sepStyle.Render(" · "))
 }
 
+func renderMenu(title string, options []string, cursor int, hint string) string {
+	var b strings.Builder
+	b.WriteString(styles.TitleStyle.Render(title))
+	b.WriteString("\n\n")
+	for i, opt := range options {
+		cur := "  "
+		style := styles.PickerNormalStyle
+		if i == cursor {
+			cur = styles.PickerCursorStyle.Render("▸ ")
+			style = styles.PickerSelectedStyle
+		}
+		b.WriteString(cur + style.Render(opt) + "\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(styles.PickerHintStyle.Render("  " + hint))
+	b.WriteString("\n")
+	return b.String()
+}
+
 func (m TUIModel) View() string {
 	if m.quitting {
 		return ""
@@ -454,20 +473,8 @@ func (m TUIModel) View() string {
 		styles.HeaderKeyStyle.Render("Source:"), styles.RenderBranch(srcBranch)))
 
 	if m.mode == modeAgentSetup {
-		b.WriteString(styles.TitleStyle.Render(m.menuTitle))
-		b.WriteString("\n\n")
-		for i, opt := range m.menuOptions {
-			cursor := "  "
-			style := styles.PickerNormalStyle
-			if i == m.menuCursor {
-				cursor = styles.PickerCursorStyle.Render("▸ ")
-				style = styles.PickerSelectedStyle
-			}
-			b.WriteString(cursor + style.Render(opt) + "\n")
-		}
-		b.WriteString("\n")
-		b.WriteString(styles.PickerHintStyle.Render("  j/k navigate · enter select · esc quit"))
-		b.WriteString("\n")
+		b.WriteString(renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
+			"j/k navigate · enter select · esc quit"))
 		return b.String()
 	}
 
@@ -515,20 +522,8 @@ func (m TUIModel) View() string {
 
 	// Show inline menu
 	if m.mode == modeMenu {
-		b.WriteString(styles.TitleStyle.Render(m.menuTitle))
-		b.WriteString("\n\n")
-		for i, opt := range m.menuOptions {
-			cursor := "  "
-			style := styles.PickerNormalStyle
-			if i == m.menuCursor {
-				cursor = styles.PickerCursorStyle.Render("▸ ")
-				style = styles.PickerSelectedStyle
-			}
-			b.WriteString(cursor + style.Render(opt) + "\n")
-		}
-		b.WriteString("\n")
-		b.WriteString(styles.PickerHintStyle.Render("  j/k navigate · enter select · esc cancel"))
-		b.WriteString("\n")
+		b.WriteString(renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
+			"j/k navigate · enter select · esc cancel"))
 		return b.String()
 	}
 

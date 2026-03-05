@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
@@ -50,8 +51,8 @@ func newTaskPickerModel(
 			a.Branch,
 		}
 		for i, c := range cols {
-			if len(c) > maxW[i] {
-				maxW[i] = len(c)
+			if w := lipgloss.Width(c); w > maxW[i] {
+				maxW[i] = w
 			}
 		}
 		items = append(items, taskPickerItem{agent: a, cols: cols})
@@ -135,7 +136,6 @@ func (m taskPickerModel) View() string {
 		isCursor := i == m.cursor
 		isChecked := m.checked[i]
 
-		// Cursor + checkbox
 		cursor := "  "
 		if isCursor {
 			cursor = styles.PickerCursorStyle.Render("▸ ")
@@ -145,23 +145,15 @@ func (m taskPickerModel) View() string {
 			check = styles.PickerCursorStyle.Render("[x] ")
 		}
 
-		// Build padded columns
-		name := pad(item.cols[0], m.colWidths[0])
-		status := pad(item.cols[1], m.colWidths[1])
-		commits := pad(item.cols[2], m.colWidths[2])
-		dirty := pad(item.cols[3], m.colWidths[3])
-		branch := item.cols[4]
-
-		// Apply styles
+		nameStyle := styles.PickerNormalStyle
 		if isCursor {
-			name = styles.PickerSelectedStyle.Render(name)
-		} else {
-			name = styles.PickerNormalStyle.Render(name)
+			nameStyle = styles.PickerSelectedStyle
 		}
-		status = AgentStatusStyled(item.agent, status)
-		commits = styles.AheadStyle.Render(commits)
-		dirty = styles.DirtyStyle.Render(dirty)
-		branch = styles.RenderBranch(branch)
+		name := nameStyle.Width(m.colWidths[0]).Render(item.cols[0])
+		status := AgentStatusStyled(item.agent, lipgloss.NewStyle().Width(m.colWidths[1]).Render(item.cols[1]))
+		commits := styles.AheadStyle.Width(m.colWidths[2]).Render(item.cols[2])
+		dirty := styles.DirtyStyle.Width(m.colWidths[3]).Render(item.cols[3])
+		branch := styles.RenderBranch(item.cols[4])
 
 		sep := styles.SeparatorStyle.Render(" │ ")
 		b.WriteString(cursor + check + name + sep + status + sep + commits + sep + dirty + sep + branch + "\n")
@@ -171,13 +163,6 @@ func (m taskPickerModel) View() string {
 	b.WriteString(styles.PickerHintStyle.Render("j/k navigate · g/G top/bottom · space/x toggle · a all · enter confirm · esc cancel"))
 	b.WriteString("\n")
 	return b.String()
-}
-
-func pad(s string, width int) string {
-	if len(s) >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-len(s))
 }
 
 // RunPicker shows a multi-select picker and returns selected agent indices (nil if cancelled).
