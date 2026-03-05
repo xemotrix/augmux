@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
+	"github.com/xemotrix/augmux/internal/ops"
+	// "github.com/xemotrix/augmux/internal/tui"
 )
 
 // TUIAction represents an action the user triggered from the interactive TUI.
@@ -48,7 +51,7 @@ func (ActionDone) isActionResult() {}
 type MenuRequest struct {
 	Title    string
 	Options  []string
-	Lines    []string                    // status lines shown above the menu
+	Lines    []string                      // status lines shown above the menu
 	Callback func(choice int) ActionResult // called with selected index (-1 = cancelled)
 }
 
@@ -245,13 +248,13 @@ type interactiveTUIModel struct {
 	quitting      bool
 	mode          tuiMode
 	spinner       spinner.Model
-	textInput     textinput.Model                       // for spawn
-	statusLines   []string                              // output from last action
-	actionHandler func(TUIResult, string) ActionResult  // returns action result
-	menuTitle     string                                // inline menu title
-	menuOptions   []string                              // inline menu options
-	menuCursor    int                                   // inline menu cursor
-	menuCallback  func(int) ActionResult                // inline menu callback
+	textInput     textinput.Model                      // for spawn
+	statusLines   []string                             // output from last action
+	actionHandler func(TUIResult, string) ActionResult // returns action result
+	menuTitle     string                               // inline menu title
+	menuOptions   []string                             // inline menu options
+	menuCursor    int                                  // inline menu cursor
+	menuCallback  func(int) ActionResult               // inline menu callback
 }
 
 type tickMsg time.Time
@@ -661,7 +664,9 @@ func (m interactiveTUIModel) View() string {
 //
 // The actionHandler receives a TUIResult and an optional spawn name (non-empty
 // only for ActionSpawn).
-func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult, string) ActionResult) {
+func RunInteractiveTUI(
+	repoRoot string,
+) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
 			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
@@ -673,11 +678,73 @@ func RunInteractiveTUI(repoRoot string, actionHandler func(TUIResult, string) Ac
 		repoRoot:      repoRoot,
 		width:         100,
 		spinner:       s,
-		actionHandler: actionHandler,
+		actionHandler: tuiActionHandler(repoRoot),
 	}
 	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		core.Fatal("TUI error: %v", err)
+	}
+}
+
+func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
+	return func(result TUIResult, spawnName string) ActionResult {
+		// All ops output is discarded — the TUI refreshes agent state
+		// automatically, so no feedback text is needed.
+		var sink bytes.Buffer
+		idx := result.AgentIdx
+
+		switch result.Action {
+		case ActionMerge:
+			if idx >= 0 {
+				err := ops.MergeOne(&sink, repoRoot, idx, ops.MergeTUI)
+				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
+					return MenuRequest{
+						Title: fmt.Sprintf("Conflict merging agent %d — how to resolve?", idx),
+						Options: []string{
+							"Continue — leave conflicts, resolve manually",
+							"Abort — discard merge and reset",
+						},
+						Callback: func(choice int) ActionResult {
+							var sink2 bytes.Buffer
+							// Remap choice: 0=continue, 1=abort (maps to default in ResolveConflict)
+							if choice == 1 {
+								choice = -1
+							}
+							ops.ResolveConflict(&sink2, conflictErr, choice)
+							return ActionDone{}
+						},
+					}
+				}
+			}
+
+		case ActionSpawn:
+			ops.SpawnByName(&sink, repoRoot, spawnName)
+
+		case ActionAccept:
+			if idx >= 0 {
+				ops.AcceptOne(&sink, repoRoot, idx)
+			}
+
+		case ActionReject:
+			if idx >= 0 {
+				ops.RejectOne(&sink, repoRoot, idx)
+			}
+
+		case ActionCancel:
+			if idx >= 0 {
+				ops.CancelOne(&sink, repoRoot, idx)
+			}
+
+		case ActionFocus:
+			if idx >= 0 {
+				ag, err := core.ReadAgent(repoRoot, idx)
+				if err == nil {
+					core.TmuxRun("select-window", "-t", ag.Window)
+				}
+			}
+		}
+
+		return ActionDone{}
 	}
 }

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
-	"github.com/xemotrix/augmux/internal/tui"
 )
 
 // AgentDef describes how to invoke a particular agent CLI tool.
@@ -68,14 +68,14 @@ func loadConfig() *agentConfig {
 // saveConfig writes the config file.
 func saveConfig(cfg *agentConfig) error {
 	p := configPath()
-	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0644)
+	return os.WriteFile(p, data, 0o644)
 }
 
 // findAgent looks up an AgentDef by ID.
@@ -96,7 +96,7 @@ func promptAgentSetup() *AgentDef {
 	}
 
 	title := fmt.Sprintf("No agent CLI configured — select one:\n(config will be saved to %s)", configPath())
-	choice := tui.RunMenu(title, options)
+	choice := components.RunMenu(title, options)
 	if choice < 0 || choice >= len(knownAgents) {
 		core.Fatal("No agent selected.")
 	}
@@ -143,4 +143,3 @@ func (a *AgentDef) RunInline(dir, promptText string) error {
 func (a *AgentDef) Label() string {
 	return strings.Split(a.DisplayName, " (")[0] // e.g. "Auggie"
 }
-

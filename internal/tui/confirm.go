@@ -25,10 +25,10 @@ var (
 )
 
 type confirmModel struct {
-	message   string
+	message     string
 	yesSelected bool
-	confirmed bool
-	quitting  bool
+	confirmed   bool
+	quitting    bool
 }
 
 func (m confirmModel) Init() tea.Cmd { return nil }

@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
-	"github.com/xemotrix/augmux/internal/tui"
 )
 
 type conflictResult int
@@ -30,7 +30,7 @@ func handleConflict(w io.Writer, repoRoot, task, mergeMsg string, agentIdx int) 
 	}
 	fmt.Fprintln(w)
 
-	choice := tui.RunMenu("How do you want to resolve?", []string{
+	choice := components.RunMenu("How do you want to resolve?", []string{
 		"Continue — leave conflicts in working tree, resolve manually",
 		"Abort — discard merge and reset",
 	})

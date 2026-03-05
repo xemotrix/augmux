@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/xemotrix/augmux/internal/agent"
+	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
-	"github.com/xemotrix/augmux/internal/tui"
 )
 
 func ensureSession(w io.Writer, repoRoot string) error {
@@ -20,8 +20,8 @@ func ensureSession(w io.Writer, repoRoot string) error {
 		return fmt.Errorf("not inside a tmux session. Run this from within tmux")
 	}
 	branch := core.GitMust(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
-	os.MkdirAll(sd, 0755)
-	os.MkdirAll(core.WorktreeBase(repoRoot), 0755)
+	os.MkdirAll(sd, 0o755)
+	os.MkdirAll(core.WorktreeBase(repoRoot), 0o755)
 	core.WriteFileContent(filepath.Join(sd, "source_branch"), branch)
 	core.WriteFileContent(filepath.Join(sd, "repo_root"), repoRoot)
 	fmt.Fprintf(w, "augmux session initialized (source branch: %s)\n", branch)
@@ -38,7 +38,7 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	wtPath := filepath.Join(core.WorktreeBase(repoRoot), fmt.Sprintf("%s-%d", safe, idx))
 
 	td := filepath.Join(sd, fmt.Sprintf("task-%d", idx))
-	os.MkdirAll(td, 0755)
+	os.MkdirAll(td, 0o755)
 	core.WriteFileContent(filepath.Join(td, "description"), name)
 	core.WriteFileContent(filepath.Join(td, "branch"), branchName)
 	core.WriteFileContent(filepath.Join(td, "worktree"), wtPath)
@@ -74,7 +74,7 @@ func Spawn(w io.Writer, repoRoot string, args []string) {
 	}
 	ag := agent.ActiveAgent()
 	if len(args) == 0 {
-		name := tui.RunTextInput("Task name for new agent:")
+		name := components.RunTextInput("Task name for new agent:")
 		if name == "" {
 			fmt.Fprintln(w, "Empty name — aborting.")
 			return
@@ -89,7 +89,6 @@ func Spawn(w io.Writer, repoRoot string, args []string) {
 	fmt.Fprintln(w, "Check status: augmux status")
 }
 
-
 // SpawnByName spawns a single agent with the given name (no interactive prompt).
 func SpawnByName(w io.Writer, repoRoot string, name string) {
 	repoRoot = core.MustAbs(repoRoot)
@@ -101,3 +100,4 @@ func SpawnByName(w io.Writer, repoRoot string, name string) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Check status: augmux status")
 }
+
