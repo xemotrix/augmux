@@ -37,23 +37,20 @@ func RunAgentCard(
 		bdr = bdr.Bold(true)
 	}
 
-	// Top border — manually constructed to embed agent ID and status badge.
+	// Top border — manually constructed to embed status badge on the left.
 	statusRaw := AgentStatusRaw(a)
 	statusStyled := AgentStatusStyled(a, statusRaw)
-	idLabel := fmt.Sprintf("❮%d❯", a.Index)
-	idStyled := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWhite).Render(idLabel)
 
 	topLeft := border.TopLeft + border.Top
 	topRight := border.Top + border.TopRight
-	used := lipgloss.Width(topLeft) + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + lipgloss.Width(topRight)
+	used := lipgloss.Width(topLeft) + 1 + lipgloss.Width(statusRaw) + 1 + lipgloss.Width(topRight)
 	fill := max(cardWidth-used, 1)
 	topLine := lipgloss.JoinHorizontal(lipgloss.Top,
 		bdr.Render(topLeft),
-		idStyled,
-		bdr.Render(strings.Repeat(border.Top, fill)),
 		lipgloss.NewStyle().Render(" "),
 		statusStyled,
 		lipgloss.NewStyle().Render(" "),
+		bdr.Render(strings.Repeat(border.Top, fill)),
 		bdr.Render(topRight),
 	)
 
