@@ -1,11 +1,11 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
 
@@ -93,8 +93,7 @@ func RunConfirm(message string) bool {
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
-		fmt.Printf("TUI error: %v\n", err)
-		return false
+		core.Fatal("TUI error: %v", err)
 	}
 	return final.(confirmModel).confirmed
 }

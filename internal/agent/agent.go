@@ -105,8 +105,6 @@ func promptAgentSetup() *AgentDef {
 	if err := saveConfig(&agentConfig{Agent: agent.ID}); err != nil {
 		core.Fatal("Failed to save config: %v", err)
 	}
-	fmt.Printf("\n  ✓ Configured to use %s (%s)\n", agent.DisplayName, agent.Command)
-	fmt.Printf("    Config saved to %s\n\n", configPath())
 	return agent
 }
 
@@ -133,7 +131,6 @@ func ActiveAgent() *AgentDef {
 		if a := findAgent(cfg.Agent); a != nil {
 			return a
 		}
-		fmt.Fprintf(os.Stderr, "Warning: configured agent %q not found, reconfiguring...\n\n", cfg.Agent)
 	}
 	return promptAgentSetup()
 }

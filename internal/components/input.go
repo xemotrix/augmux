@@ -1,11 +1,11 @@
 package components
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
 
@@ -72,8 +72,7 @@ func RunTextInput(prompt, placeholder string) string {
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
-		fmt.Printf("TUI error: %v\n", err)
-		return ""
+		core.Fatal("TUI error: %v", err)
 	}
 	fm := final.(inputModel)
 	if !fm.confirmed {

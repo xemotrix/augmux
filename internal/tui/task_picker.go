@@ -184,7 +184,6 @@ func pad(s string, width int) string {
 func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int {
 	agents := core.ListAgents(repoRoot)
 	if len(agents) == 0 {
-		fmt.Println("No agents found.")
 		return nil
 	}
 	srcBranch := core.SourceBranch(repoRoot)
@@ -200,7 +199,6 @@ func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int
 	}
 	m := newTaskPickerModel(title, repoRoot, states, filter)
 	if len(m.items) == 0 {
-		fmt.Println("No matching agents found.")
 		return nil
 	}
 	if len(m.items) == 1 {
