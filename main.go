@@ -9,8 +9,6 @@ import (
 	"github.com/xemotrix/augmux/internal/tui"
 )
 
-// conflict 1
-// coN 22
 const version = "0.2.0"
 
 func main() {
