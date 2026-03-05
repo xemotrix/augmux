@@ -8,7 +8,7 @@ import (
 	"github.com/xemotrix/augmux/internal/styles"
 )
 
-type menuModel struct {
+type selectMenuModel struct {
 	title   string
 	options []string
 	cursor  int
@@ -16,13 +16,13 @@ type menuModel struct {
 	quit    bool
 }
 
-func newMenuModel(title string, options []string) menuModel {
-	return menuModel{title: title, options: options, cursor: 0, chosen: -1}
+func newSelectMenuModel(title string, options []string) selectMenuModel {
+	return selectMenuModel{title: title, options: options, cursor: 0, chosen: -1}
 }
 
-func (m menuModel) Init() tea.Cmd { return nil }
+func (m selectMenuModel) Init() tea.Cmd { return nil }
 
-func (m menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m selectMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -50,7 +50,7 @@ func (m menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m menuModel) View() string {
+func (m selectMenuModel) View() string {
 	if m.quit {
 		return ""
 	}
@@ -74,17 +74,17 @@ func (m menuModel) View() string {
 	return b.String()
 }
 
-// RunMenu shows a single-select menu and returns the chosen index, or -1 if cancelled.
-func RunMenu(title string, options []string) int {
+// RunSelectMenu shows a single-select menu and returns the chosen index, or -1 if cancelled.
+func RunSelectMenu(title string, options []string) int {
 	if len(options) == 1 {
 		return 0
 	}
-	m := newMenuModel(title, options)
+	m := newSelectMenuModel(title, options)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
 		fmt.Printf("TUI error: %v\n", err)
 		return -1
 	}
-	return final.(menuModel).chosen
+	return final.(selectMenuModel).chosen
 }

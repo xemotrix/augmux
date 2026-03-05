@@ -6,21 +6,22 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/xemotrix/augmux/internal/styles"
 )
 
 var (
 	confirmActiveStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(colorWhite).
-				Background(colorAccent).
+				Foreground(styles.ColorWhite).
+				Background(styles.ColorAccent).
 				Padding(0, 2)
 
 	confirmInactiveStyle = lipgloss.NewStyle().
-				Foreground(colorGray).
+				Foreground(styles.ColorGray).
 				Padding(0, 2)
 
 	confirmWarningStyle = lipgloss.NewStyle().
-				Foreground(colorRed).
+				Foreground(styles.ColorRed).
 				Bold(true)
 )
 
@@ -80,7 +81,7 @@ func (m confirmModel) View() string {
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yes, "    ", no)
 	b.WriteString(lipgloss.PlaceHorizontal(60, lipgloss.Center, buttons))
 	b.WriteString("\n\n")
-	b.WriteString(pickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel"))
+	b.WriteString(styles.PickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel"))
 	b.WriteString("\n")
 
 	return b.String()

@@ -92,7 +92,7 @@ func MergeOne(w io.Writer, repoRoot string, idx int, mode MergeMode) error {
 					fmt.Fprintf(w, "    %s\n", line)
 				}
 				fmt.Fprintln(w)
-				choice := components.RunMenu("Uncommitted changes — cannot merge", []string{
+				choice := components.RunSelectMenu("Uncommitted changes — cannot merge", []string{
 					"Commit them now with a default message",
 					"Abort merge for this agent",
 				})

@@ -96,7 +96,7 @@ func promptAgentSetup() *AgentDef {
 	}
 
 	title := fmt.Sprintf("No agent CLI configured — select one:\n(config will be saved to %s)", configPath())
-	choice := components.RunMenu(title, options)
+	choice := components.RunSelectMenu(title, options)
 	if choice < 0 || choice >= len(knownAgents) {
 		core.Fatal("No agent selected.")
 	}

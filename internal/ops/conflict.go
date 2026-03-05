@@ -30,7 +30,7 @@ func handleConflict(w io.Writer, repoRoot, task, mergeMsg string, agentIdx int) 
 	}
 	fmt.Fprintln(w)
 
-	choice := components.RunMenu("How do you want to resolve?", []string{
+	choice := components.RunSelectMenu("How do you want to resolve?", []string{
 		"Continue — leave conflicts in working tree, resolve manually",
 		"Abort — discard merge and reset",
 	})

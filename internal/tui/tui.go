@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/ops"
+	"github.com/xemotrix/augmux/internal/styles"
 	// "github.com/xemotrix/augmux/internal/tui"
 )
 
@@ -83,22 +84,22 @@ func truncate(s string, n int) string {
 
 func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
-		return colorCyan // merged
+		return styles.ColorCyan // merged
 	}
 	if a.Resolving != "" {
-		return colorRed // resolving conflicts
+		return styles.ColorRed // resolving conflicts
 	}
 	if a.HasConflicts {
-		return colorRed // would conflict if merged
+		return styles.ColorRed // would conflict if merged
 	}
 	if a.Activity == core.ActivityWorking {
-		return colorYellow // working
+		return styles.ColorYellow // working
 	}
 	// idle
 	if commitsAhead > 0 {
-		return colorGreen // idle, some commits
+		return styles.ColorGreen // idle, some commits
 	}
-	return colorDimGray // idle, no commits
+	return styles.ColorDimGray // idle, no commits
 }
 
 func activityRawStr(a *core.AgentState) string {
@@ -110,15 +111,15 @@ func activityRawStr(a *core.AgentState) string {
 
 func activityIndicator(a *core.AgentState, spinnerFrame string) string {
 	if a.Activity == core.ActivityWorking {
-		return lipgloss.NewStyle().Foreground(colorYellow).Render(spinnerFrame + " working")
+		return lipgloss.NewStyle().Foreground(styles.ColorYellow).Render(spinnerFrame + " working")
 	}
-	return lipgloss.NewStyle().Foreground(colorDimGray).Render("○ idle")
+	return lipgloss.NewStyle().Foreground(styles.ColorDimGray).Render("○ idle")
 }
 
 func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame string, selected ...bool) string {
 	sel := len(selected) > 0 && selected[0]
 
-	// Compute commits ahead early — needed for border color and branch line
+	// Compute commits ahead early — needed for border styles.Color and branch line
 	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 	if ahead == "" {
 		ahead = "?"
@@ -145,7 +146,7 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 
 	// Top border: ╭─❮3❯──────────────────────── ● wip ─╮
 	idLabel := fmt.Sprintf("❮%d❯", a.Index)
-	idStyled := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(idLabel)
+	idStyled := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWhite).Render(idLabel)
 
 	// cardWidth - "╭─"(2) - idLabel - fill - " status "(1+statusRaw+1) - "─╮"(2)
 	used := 2 + lipgloss.Width(idLabel) + 1 + lipgloss.Width(statusRaw) + 1 + 2
@@ -161,7 +162,7 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 	maxName := max(textWidth-lipgloss.Width(activityRaw)-1, 10)
 	name := truncate(a.Description, maxName)
 	namePad := max(textWidth-lipgloss.Width(name)-lipgloss.Width(activityRaw), 1)
-	nameLine := bdr.Render(cV) + " " + valueStyle.Render(name) +
+	nameLine := bdr.Render(cV) + " " + styles.ValueStyle.Render(name) +
 		strings.Repeat(" ", namePad) + activityStr + " " + bdr.Render(cV)
 
 	// Branch line
@@ -176,9 +177,9 @@ func renderAgentCard(a *core.AgentState, repoRoot, srcBranch, spinnerFrame strin
 	maxBranch := textWidth - lipgloss.Width(rightInfo) - 1 - iconWidth
 	branch := truncate(a.Branch, maxBranch)
 	branchGap := max(textWidth-lipgloss.Width(branch)-iconWidth-lipgloss.Width(rightInfo), 1)
-	branchLine := bdr.Render(cV) + " " + RenderBranch(branch) +
+	branchLine := bdr.Render(cV) + " " + styles.RenderBranch(branch) +
 		strings.Repeat(" ", branchGap) +
-		aheadStyle.Render(aheadStr) + "  " + dirtyStyle.Render(dirtyStr) +
+		styles.AheadStyle.Render(aheadStr) + "  " + styles.DirtyStyle.Render(dirtyStr) +
 		" " + bdr.Render(cV)
 
 	// Bottom border
@@ -191,15 +192,15 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 	srcBranch := core.SourceBranch(repoRoot)
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("  \uebc8 augmux session"))
+	b.WriteString(styles.TitleStyle.Render("  \uebc8 augmux session"))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
-		headerKeyStyle.Render("Repo:"), headerValStyle.Render(repoRoot),
-		headerKeyStyle.Render("Source:"), RenderBranch(srcBranch)))
+		styles.HeaderKeyStyle.Render("Repo:"), styles.HeaderValStyle.Render(repoRoot),
+		styles.HeaderKeyStyle.Render("Source:"), styles.RenderBranch(srcBranch)))
 
 	agents := core.ListAgents(repoRoot)
 	if len(agents) == 0 {
-		b.WriteString(labelStyle.Render("  No agents running.\n"))
+		b.WriteString(styles.LabelStyle.Render("  No agents running.\n"))
 		return b.String()
 	}
 
@@ -225,7 +226,7 @@ func RenderStatusView(repoRoot string, termWidth int) string {
 	}
 	b.WriteString(lipgloss.JoinVertical(lipgloss.Left, rows...))
 	b.WriteString("\n\n")
-	b.WriteString(pickerHintStyle.Render("  spawn · merge · accept · reject · cancel"))
+	b.WriteString(styles.PickerHintStyle.Render("  spawn · merge · accept · reject · cancel"))
 	return b.String()
 }
 
@@ -470,8 +471,8 @@ func (m interactiveTUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ti.Focus()
 		ti.CharLimit = 80
 		ti.Width = 50
-		ti.PromptStyle = pickerCursorStyle
-		ti.TextStyle = pickerSelectedStyle
+		ti.PromptStyle = styles.PickerCursorStyle
+		ti.TextStyle = styles.PickerSelectedStyle
 		m.textInput = ti
 		m.mode = modeSpawning
 		m.statusLines = nil
@@ -542,10 +543,10 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 		{"cancel", isWip || isResolving},    // wip or resolving
 	}
 
-	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
-	enabledStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	disabledStyle := lipgloss.NewStyle().Foreground(colorDimGray)
-	sepStyle := lipgloss.NewStyle().Foreground(colorDimGray)
+	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorAccent)
+	enabledStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWhite)
+	disabledStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
+	sepStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
 
 	var parts []string
 	for _, act := range actions {
@@ -580,14 +581,14 @@ func (m interactiveTUIModel) View() string {
 	srcBranch := core.SourceBranch(m.repoRoot)
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("  \uebc8 augmux session"))
+	b.WriteString(styles.TitleStyle.Render("  \uebc8 augmux session"))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s %s   %s %s\n\n",
-		headerKeyStyle.Render("Repo:"), headerValStyle.Render(m.repoRoot),
-		headerKeyStyle.Render("Source:"), RenderBranch(srcBranch)))
+		styles.HeaderKeyStyle.Render("Repo:"), styles.HeaderValStyle.Render(m.repoRoot),
+		styles.HeaderKeyStyle.Render("Source:"), styles.RenderBranch(srcBranch)))
 
 	if len(m.agents) == 0 {
-		b.WriteString(labelStyle.Render("  No agents running.\n"))
+		b.WriteString(styles.LabelStyle.Render("  No agents running.\n"))
 	} else {
 		spinnerFrame := m.spinner.View()
 		var cards []string
@@ -609,7 +610,7 @@ func (m interactiveTUIModel) View() string {
 
 	// Show status lines from last action
 	if len(m.statusLines) > 0 {
-		statusStyle := lipgloss.NewStyle().Foreground(colorGreen)
+		statusStyle := lipgloss.NewStyle().Foreground(styles.ColorGreen)
 		for _, line := range m.statusLines {
 			b.WriteString(statusStyle.Render(line))
 			b.WriteString("\n")
@@ -619,30 +620,30 @@ func (m interactiveTUIModel) View() string {
 
 	// Show text input for spawn mode
 	if m.mode == modeSpawning {
-		b.WriteString(titleStyle.Render("Task name for new agent:"))
+		b.WriteString(styles.TitleStyle.Render("Task name for new agent:"))
 		b.WriteString("\n\n")
 		b.WriteString("  " + m.textInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(pickerHintStyle.Render("  enter confirm · esc cancel"))
+		b.WriteString(styles.PickerHintStyle.Render("  enter confirm · esc cancel"))
 		b.WriteString("\n")
 		return b.String()
 	}
 
 	// Show inline menu
 	if m.mode == modeMenu {
-		b.WriteString(titleStyle.Render(m.menuTitle))
+		b.WriteString(styles.TitleStyle.Render(m.menuTitle))
 		b.WriteString("\n\n")
 		for i, opt := range m.menuOptions {
 			cursor := "  "
-			style := pickerNormalStyle
+			style := styles.PickerNormalStyle
 			if i == m.menuCursor {
-				cursor = pickerCursorStyle.Render("▸ ")
-				style = pickerSelectedStyle
+				cursor = styles.PickerCursorStyle.Render("▸ ")
+				style = styles.PickerSelectedStyle
 			}
 			b.WriteString(cursor + style.Render(opt) + "\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(pickerHintStyle.Render("  j/k navigate · enter select · esc cancel"))
+		b.WriteString(styles.PickerHintStyle.Render("  j/k navigate · enter select · esc cancel"))
 		b.WriteString("\n")
 		return b.String()
 	}
@@ -672,7 +673,7 @@ func RunInteractiveTUI(
 			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
 			FPS:    time.Second / 10,
 		}),
-		spinner.WithStyle(lipgloss.NewStyle().Foreground(colorYellow)),
+		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
 	)
 	m := interactiveTUIModel{
 		repoRoot:      repoRoot,

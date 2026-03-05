@@ -6,26 +6,31 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/xemotrix/augmux/internal/core"
+	"github.com/xemotrix/augmux/internal/styles"
 )
 
-type pickerItem struct {
+type taskPickerItem struct {
 	agent *core.AgentState
 	cols  [5]string // name, status, commits, dirty, branch
 }
 
-type pickerModel struct {
-	title    string
-	items    []pickerItem
-	cursor   int
-	checked  map[int]bool
-	quitting bool
+type taskPickerModel struct {
+	title     string
+	items     []taskPickerItem
+	cursor    int
+	checked   map[int]bool
+	quitting  bool
 	confirmed bool
 	colWidths [5]int
 }
 
-func newPickerModel(title, repoRoot string, agents []*core.AgentState, filter func(*core.AgentState) bool) pickerModel {
+func newTaskPickerModel(
+	title, repoRoot string,
+	agents []*core.AgentState,
+	filter func(*core.AgentState) bool,
+) taskPickerModel {
 	srcBranch := core.SourceBranch(repoRoot)
-	var items []pickerItem
+	var items []taskPickerItem
 	var maxW [5]int
 
 	for _, a := range agents {
@@ -49,14 +54,14 @@ func newPickerModel(title, repoRoot string, agents []*core.AgentState, filter fu
 				maxW[i] = len(c)
 			}
 		}
-		items = append(items, pickerItem{agent: a, cols: cols})
+		items = append(items, taskPickerItem{agent: a, cols: cols})
 	}
-	return pickerModel{title: title, items: items, cursor: 0, checked: make(map[int]bool), colWidths: maxW}
+	return taskPickerModel{title: title, items: items, cursor: 0, checked: make(map[int]bool), colWidths: maxW}
 }
 
-func (m pickerModel) Init() tea.Cmd { return nil }
+func (m taskPickerModel) Init() tea.Cmd { return nil }
 
-func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m taskPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -118,12 +123,12 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m pickerModel) View() string {
+func (m taskPickerModel) View() string {
 	if m.quitting {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(m.title))
+	b.WriteString(styles.TitleStyle.Render(m.title))
 	b.WriteString("\n\n")
 
 	for i, item := range m.items {
@@ -133,11 +138,11 @@ func (m pickerModel) View() string {
 		// Cursor + checkbox
 		cursor := "  "
 		if isCursor {
-			cursor = pickerCursorStyle.Render("▸ ")
+			cursor = styles.PickerCursorStyle.Render("▸ ")
 		}
 		check := "[ ] "
 		if isChecked {
-			check = pickerCursorStyle.Render("[x] ")
+			check = styles.PickerCursorStyle.Render("[x] ")
 		}
 
 		// Build padded columns
@@ -149,21 +154,21 @@ func (m pickerModel) View() string {
 
 		// Apply styles
 		if isCursor {
-			name = pickerSelectedStyle.Render(name)
+			name = styles.PickerSelectedStyle.Render(name)
 		} else {
-			name = pickerNormalStyle.Render(name)
+			name = styles.PickerNormalStyle.Render(name)
 		}
 		status = AgentStatusStyled(item.agent, status)
-		commits = aheadStyle.Render(commits)
-		dirty = dirtyStyle.Render(dirty)
-		branch = RenderBranch(branch)
+		commits = styles.AheadStyle.Render(commits)
+		dirty = styles.DirtyStyle.Render(dirty)
+		branch = styles.RenderBranch(branch)
 
-		sep := separatorStyle.Render(" │ ")
+		sep := styles.SeparatorStyle.Render(" │ ")
 		b.WriteString(cursor + check + name + sep + status + sep + commits + sep + dirty + sep + branch + "\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(pickerHintStyle.Render("j/k navigate · g/G top/bottom · space/x toggle · a all · enter confirm · esc cancel"))
+	b.WriteString(styles.PickerHintStyle.Render("j/k navigate · g/G top/bottom · space/x toggle · a all · enter confirm · esc cancel"))
 	b.WriteString("\n")
 	return b.String()
 }
@@ -193,7 +198,7 @@ func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int
 			states = append(states, a)
 		}
 	}
-	m := newPickerModel(title, repoRoot, states, filter)
+	m := newTaskPickerModel(title, repoRoot, states, filter)
 	if len(m.items) == 0 {
 		fmt.Println("No matching agents found.")
 		return nil
@@ -206,7 +211,7 @@ func RunPicker(title, repoRoot string, filter func(*core.AgentState) bool) []int
 	if err != nil {
 		core.Fatal("TUI error: %v", err)
 	}
-	fm := final.(pickerModel)
+	fm := final.(taskPickerModel)
 	if !fm.confirmed {
 		return nil
 	}
@@ -234,15 +239,13 @@ func AgentStatusRaw(a *core.AgentState) string {
 
 func AgentStatusStyled(a *core.AgentState, text string) string {
 	if a.MergeCommit != "" {
-		return badgeMerged.Render(text)
+		return styles.BadgeMerged.Render(text)
 	}
 	if a.Resolving != "" {
-		return badgeResolving.Render(text)
+		return styles.BadgeResolving.Render(text)
 	}
 	if a.HasConflicts {
-		return badgeConflicts.Render(text)
+		return styles.BadgeConflicts.Render(text)
 	}
-	return badgeWip.Render(text)
+	return styles.BadgeWip.Render(text)
 }
-
-
