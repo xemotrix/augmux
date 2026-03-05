@@ -44,6 +44,7 @@ type ActionResult interface {
 // ActionDone signals that the action completed. Lines are shown as status.
 type ActionDone struct {
 	Lines []string
+	Level ToastLevel
 }
 
 func (ActionDone) isActionResult() {}
@@ -166,7 +167,7 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshAgents()
 			var cmds []tea.Cmd
 			for _, line := range v.Lines {
-				cmds = append(cmds, AddToast(line, ToastInfo))
+				cmds = append(cmds, AddToast(line, v.Level))
 			}
 			return m, tea.Batch(cmds...)
 		case MenuRequest:
@@ -623,50 +624,94 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 				err := ops.MergeOne(&sink, repoRoot, idx)
 				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
 					return MenuRequest{
-						Title: fmt.Sprintf("Conflict merging agent %d — how to resolve?", idx),
+						Title: fmt.Sprintf("Conflict merging %s — how to resolve?", agentLabel),
 						Options: []string{
 							"Continue — leave conflicts, resolve manually",
 							"Abort — discard merge and reset",
 						},
 						Callback: func(choice int) ActionResult {
 							var sink2 bytes.Buffer
-							if choice == 1 {
-								choice = -1
+							if choice == 1 || choice == -1 {
+								ops.ResolveConflict(&sink2, conflictErr, -1)
+								return ActionDone{
+									Lines: []string{"Merge aborted"},
+									Level: ToastWarning,
+								}
 							}
-							ops.ResolveConflict(&sink2, conflictErr, choice)
-							return ActionDone{}
+							ops.ResolveConflict(&sink2, conflictErr, 0)
+							return ActionDone{
+								Lines: []string{"Conflicts left for manual resolution"},
+								Level: ToastWarning,
+							}
 						},
 					}
 				}
-				return ActionDone{Lines: []string{fmt.Sprintf("Merged %s", agentLabel)}}
+				if err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Merge failed: %s", err)},
+						Level: ToastError,
+					}
+				}
+				return ActionDone{
+					Lines: []string{fmt.Sprintf("Merged %s", agentLabel)},
+					Level: ToastSuccess,
+				}
 			}
 
 		case ActionSpawn:
 			ops.SpawnByName(&sink, repoRoot, spawnName)
+			return ActionDone{
+				Lines: []string{fmt.Sprintf("Spawned %q", spawnName)},
+				Level: ToastSuccess,
+			}
 
 		case ActionAccept:
 			if idx >= 0 {
-				ops.AcceptOne(&sink, repoRoot, idx)
-				return ActionDone{Lines: []string{fmt.Sprintf("Accepted %s", agentLabel)}}
+				if err := ops.AcceptOne(&sink, repoRoot, idx); err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Accept failed: %s", err)},
+						Level: ToastError,
+					}
+				}
+				return ActionDone{
+					Lines: []string{fmt.Sprintf("Accepted %s", agentLabel)},
+					Level: ToastSuccess,
+				}
 			}
 
 		case ActionReject:
 			if idx >= 0 {
-				ops.RejectOne(&sink, repoRoot, idx)
-				return ActionDone{Lines: []string{fmt.Sprintf("Rejected %s", agentLabel)}}
+				if err := ops.RejectOne(&sink, repoRoot, idx); err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Reject failed: %s", err)},
+						Level: ToastError,
+					}
+				}
+				return ActionDone{
+					Lines: []string{fmt.Sprintf("Rejected %s", agentLabel)},
+					Level: ToastSuccess,
+				}
 			}
 
 		case ActionCancel:
 			if idx >= 0 {
 				ops.CancelOne(&sink, repoRoot, idx)
+				return ActionDone{
+					Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
+					Level: ToastSuccess,
+				}
 			}
 
 		case ActionFocus:
 			if idx >= 0 {
 				ag, err := core.ReadAgent(repoRoot, idx)
-				if err == nil {
-					core.TmuxRun("select-window", "-t", ag.Window)
+				if err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Failed to focus: %s", err)},
+						Level: ToastError,
+					}
 				}
+				core.TmuxRun("select-window", "-t", ag.Window)
 			}
 		}
 
