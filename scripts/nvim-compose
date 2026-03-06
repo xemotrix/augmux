@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# nvim-compose — open nvim in a tmux popup to compose text, then paste it
+# nvim-compose — open $EDITOR in a tmux popup to compose text, then paste it
 # into the original pane. Useful for writing multi-line prompts when using
 # CLI-based AI agents (Cursor, Claude Code, etc.).
 #
@@ -15,13 +15,15 @@
 #
 #   tmux source-file ~/.tmux.conf
 #
-# Ctrl-O (no prefix needed) will open a floating nvim popup. Write your
-# text, :wq, and it gets pasted into the pane you came from.
+# Ctrl-O (no prefix needed) will open a floating editor popup. Write your
+# text, save and quit, and it gets pasted into the pane you came from.
+#
+# Uses $EDITOR if set, falls back to nvim.
 #
 # REQUIREMENTS
 # ------------
 # - tmux 3.2+ (for popup support)
-# - nvim
+# - $EDITOR or nvim
 #
 
 TMPFILE=$(mktemp /tmp/nvim-compose-XXXXXX.md)
@@ -29,9 +31,11 @@ trap 'rm -f "$TMPFILE"' EXIT
 
 PANE_ID=$(tmux display-message -p '#{pane_id}')
 
-tmux popup -w 80% -h 80% -E "nvim -c 'startinsert' '$TMPFILE'"
+COMPOSE_EDITOR="${EDITOR:-nvim}"
+
+tmux popup -w 80% -h 80% -E "$COMPOSE_EDITOR '$TMPFILE'"
 
 if [ -s "$TMPFILE" ]; then
   tmux load-buffer "$TMPFILE"
-  tmux paste-buffer -t "$PANE_ID" -d
+  tmux paste-buffer -t "$PANE_ID" -dp
 fi
