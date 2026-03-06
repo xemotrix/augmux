@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# nvim-compose — open nvim in a tmux popup to compose text, then paste it
+# into the original pane. Useful for writing multi-line prompts when using
+# CLI-based AI agents (Cursor, Claude Code, etc.).
+#
+# SETUP
+# -----
+# Add the following to your ~/.tmux.conf (adjust the path to wherever this
+# repo lives on your machine):
+#
+#   bind-key -n C-o run-shell "/path/to/augmux/scripts/nvim-compose"
+#
+# Then reload tmux config:
+#
+#   tmux source-file ~/.tmux.conf
+#
+# Ctrl-O (no prefix needed) will open a floating nvim popup. Write your
+# text, :wq, and it gets pasted into the pane you came from.
+#
+# REQUIREMENTS
+# ------------
+# - tmux 3.2+ (for popup support)
+# - nvim
+#
+
+TMPFILE=$(mktemp /tmp/nvim-compose-XXXXXX.md)
+trap 'rm -f "$TMPFILE"' EXIT
+
+PANE_ID=$(tmux display-message -p '#{pane_id}')
+
+tmux popup -w 80% -h 80% -E "nvim -c 'startinsert' '$TMPFILE'"
+
+if [ -s "$TMPFILE" ]; then
+  tmux load-buffer "$TMPFILE"
+  tmux paste-buffer -t "$PANE_ID" -d
+fi
