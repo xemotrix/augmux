@@ -70,31 +70,7 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 		switch result.Action {
 		case ActionMerge:
 			if idx >= 0 {
-				err := ops.MergeOne(repoRoot, idx)
-				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
-					return MenuRequest{
-						Title: fmt.Sprintf("Conflict merging %s — how to resolve?", agentLabel),
-						Options: []string{
-							"Continue — leave conflicts, resolve manually",
-							"Abort — discard merge and reset",
-						},
-						Callback: func(choice int) ActionResult {
-							if choice == 1 || choice == -1 {
-								ops.ResolveConflict(conflictErr, -1)
-								return ActionDone{
-									Lines: []string{"Merge aborted"},
-									Level: ToastWarning,
-								}
-							}
-							ops.ResolveConflict(conflictErr, 0)
-							return ActionDone{
-								Lines: []string{"Conflicts left for manual resolution"},
-								Level: ToastWarning,
-							}
-						},
-					}
-				}
-				if err != nil {
+				if err := ops.MergeOne(repoRoot, idx); err != nil {
 					return ActionDone{
 						Lines: []string{fmt.Sprintf("Merge failed: %s", err)},
 						Level: ToastError,

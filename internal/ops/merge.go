@@ -2,25 +2,9 @@ package ops
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/xemotrix/augmux/internal/core"
 )
-
-// MergeConflictErr is returned by MergeOne when conflicts are detected.
-// The working tree is left in the conflicted state so the caller can
-// resolve or abort.
-type MergeConflictErr struct {
-	RepoRoot  string
-	AgentIdx  int
-	AgentDesc string
-	MergeMsg  string
-	Files     string // newline-separated list of conflicting files
-}
-
-func (e *MergeConflictErr) Error() string {
-	return "merge conflicts detected"
-}
 
 func MergeOne(repoRoot string, idx int) error {
 	var err error
@@ -35,28 +19,11 @@ func MergeOne(repoRoot string, idx int) error {
 		return err
 	}
 
-	// Already merged?
 	if ag.MergeCommit != "" {
 		return fmt.Errorf("already merged")
 	}
 
 	srcBranch := core.SourceBranch(repoRoot)
-
-	// Check resolving state (user came back after fixing conflicts)
-	if ag.Resolving != "" {
-		unmerged, _ := core.Git(repoRoot, "diff", "--name-only", "--diff-filter=U")
-		porcelain, _ := core.Git(repoRoot, "status", "--porcelain")
-		if unmerged != "" || porcelain != "" {
-			return fmt.Errorf("still resolving")
-		}
-		sha, err := core.Git(repoRoot, "rev-parse", "HEAD")
-		if err != nil {
-			return fmt.Errorf("failed to get HEAD sha: %w", err)
-		}
-		core.WriteFileContent(td+"/merge_commit", sha)
-		os.Remove(td + "/resolving")
-		return nil
-	}
 
 	// Ensure the main repo working tree is clean before we touch it.
 	mainStatus, _ := core.Git(repoRoot, "status", "--porcelain")
@@ -89,30 +56,25 @@ func MergeOne(repoRoot string, idx int) error {
 		return nil
 	}
 
-	// Merge message
 	lastMsg := core.GitMust(repoRoot, "log", "-1", "--format=%s", ag.Branch)
 	mergeMsg := "augmux: " + lastMsg
 
-	// Try squash merge + commit
+	// Try squash merge + commit; reject if conflicts arise.
 	_, mergeErr := core.Git(repoRoot, "merge", "--squash", ag.Branch)
-	if mergeErr == nil {
-		if _, commitErr := core.Git(repoRoot, "commit", "-m", mergeMsg); commitErr == nil {
-			sha, err := core.Git(repoRoot, "rev-parse", "HEAD")
-			if err != nil {
-				return fmt.Errorf("merge succeeded but failed to record commit sha: %w", err)
-			}
-			core.WriteFileContent(td+"/merge_commit", sha)
-			return nil
-		}
+	if mergeErr != nil {
+		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
+		return fmt.Errorf("merge has conflicts — resolve conflicts before merging")
 	}
 
-	// Return conflict info without resetting — caller shows inline menu.
-	files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-	return &MergeConflictErr{
-		RepoRoot:  repoRoot,
-		AgentIdx:  idx,
-		AgentDesc: ag.Description,
-		MergeMsg:  mergeMsg,
-		Files:     files,
+	if _, commitErr := core.Git(repoRoot, "commit", "-m", mergeMsg); commitErr != nil {
+		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
+		return fmt.Errorf("failed to commit merge: %w", commitErr)
 	}
+
+	sha, err := core.Git(repoRoot, "rev-parse", "HEAD")
+	if err != nil {
+		return fmt.Errorf("merge succeeded but failed to record commit sha: %w", err)
+	}
+	core.WriteFileContent(td+"/merge_commit", sha)
+	return nil
 }

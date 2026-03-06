@@ -100,9 +100,6 @@ func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
 		return styles.ColorCyan
 	}
-	if a.Resolving != "" {
-		return styles.ColorRed
-	}
 	if a.HasConflicts {
 		return styles.ColorRed
 	}
@@ -119,9 +116,6 @@ func AgentStatusRaw(a *core.AgentState) string {
 	if a.MergeCommit != "" {
 		return "● merged"
 	}
-	if a.Resolving != "" {
-		return "● resolving"
-	}
 	if a.HasConflicts {
 		return "● conflicts"
 	}
@@ -131,9 +125,6 @@ func AgentStatusRaw(a *core.AgentState) string {
 func AgentStatusStyled(a *core.AgentState, text string) string {
 	if a.MergeCommit != "" {
 		return styles.BadgeMerged.Render(text)
-	}
-	if a.Resolving != "" {
-		return styles.BadgeResolving.Render(text)
 	}
 	if a.HasConflicts {
 		return styles.BadgeConflicts.Render(text)

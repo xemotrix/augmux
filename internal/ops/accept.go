@@ -37,16 +37,6 @@ func RejectOne(repoRoot string, idx int) error {
 		return err
 	}
 
-	// Case 1: conflicts are being resolved
-	if ag.Resolving != "" {
-		if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD"); err != nil {
-			return fmt.Errorf("failed to reset during reject: %w", err)
-		}
-		os.Remove(td + "/resolving")
-		return nil
-	}
-
-	// Case 2: merge was completed
 	if ag.MergeCommit == "" {
 		return fmt.Errorf("agent %d has not been merged yet. Nothing to reject", idx)
 	}

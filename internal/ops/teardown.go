@@ -52,12 +52,6 @@ func CancelOne(repoRoot string, idx int) error {
 		}
 	}
 
-	if ag.Resolving != "" {
-		if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD"); err != nil {
-			return fmt.Errorf("failed to reset during cancel: %w", err)
-		}
-	}
-
 	teardownOne(repoRoot, idx)
 	return nil
 }

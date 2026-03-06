@@ -45,7 +45,6 @@ type AgentState struct {
 	Branch           string
 	Worktree         string
 	MergeCommit      string
-	Resolving        string
 	Activity         string // "idle" or "working"
 	Window           string // tmux window name (e.g. "ax-1-fix-auth")
 	HasConflicts     bool   // true if merging this branch would produce conflicts
@@ -165,7 +164,6 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 		Branch:      ReadFileContent(filepath.Join(td, "branch")),
 		Worktree:    ReadFileContent(filepath.Join(td, "worktree")),
 		MergeCommit: ReadFileContent(filepath.Join(td, "merge_commit")),
-		Resolving:   ReadFileContent(filepath.Join(td, "resolving")),
 		Activity:    activity,
 		Window:      window,
 	}, nil
@@ -189,7 +187,7 @@ func EnrichAgent(repoRoot, srcBranch string, a *AgentState) {
 		}
 	}
 
-	if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
+	if a.MergeCommit == "" && a.Branch != "" {
 		a.HasConflicts = DetectConflicts(repoRoot, srcBranch, a.Branch)
 	}
 }

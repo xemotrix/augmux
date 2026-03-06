@@ -23,7 +23,6 @@ var (
 	// Status badges
 	BadgeWip       = lipgloss.NewStyle().Bold(true).Foreground(ColorGreen)
 	BadgeMerged    = lipgloss.NewStyle().Bold(true).Foreground(ColorCyan)
-	BadgeResolving = lipgloss.NewStyle().Bold(true).Foreground(ColorYellow)
 	BadgeConflicts = lipgloss.NewStyle().Bold(true).Foreground(ColorRed)
 	// Labels and values
 	LabelStyle  = lipgloss.NewStyle().Foreground(ColorDimGray)

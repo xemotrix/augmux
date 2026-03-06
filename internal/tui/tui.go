@@ -259,11 +259,11 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.cursor >= 0 && m.cursor < n {
 		sel = m.agents[m.cursor]
 	}
-	isWip := sel != nil && sel.MergeCommit == "" && sel.Resolving == ""
+	isWip := sel != nil && sel.MergeCommit == ""
 	isMerged := sel != nil && sel.MergeCommit != ""
-	isResolving := sel != nil && sel.Resolving != ""
 	isIdle := sel != nil && sel.Activity == core.ActivityIdle
 	hasCommits := sel != nil && sel.CommitsAhead > 0
+	hasConflicts := sel != nil && sel.HasConflicts
 
 	agentIdx := -1
 	if sel != nil {
@@ -328,7 +328,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
-		if isWip && hasCommits {
+		if isWip && hasCommits && !hasConflicts {
 			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
@@ -336,11 +336,11 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.runInlineAction(ActionAccept, agentIdx)
 		}
 	case "r":
-		if isMerged || isResolving {
+		if isMerged {
 			return m.runInlineAction(ActionReject, agentIdx)
 		}
 	case "c":
-		if isWip || isResolving {
+		if isWip {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
 	case "=":
@@ -402,9 +402,8 @@ func renderActionBar(a *core.AgentState, width int) string {
 		enabled bool
 	}
 
-	isWip := a != nil && a.MergeCommit == "" && a.Resolving == ""
+	isWip := a != nil && a.MergeCommit == ""
 	isMerged := a != nil && a.MergeCommit != ""
-	isResolving := a != nil && a.Resolving != ""
 	isIdle := a != nil && a.Activity == core.ActivityIdle
 	hasConflicts := a != nil && a.HasConflicts
 	hasCommits := a != nil && a.CommitsAhead > 0
@@ -413,12 +412,12 @@ func renderActionBar(a *core.AgentState, width int) string {
 	actions := []action{
 		{"enter:focus", hasAgent},
 		{"spawn", true},
-		{"merge", isWip && hasCommits},
+		{"merge", isWip && hasCommits && !hasConflicts},
 		{"re|base", isWip && hasConflicts && isIdle},
 		{"=:details", hasCommits},
 		{"accept", isMerged},
-		{"reject", isMerged || isResolving},
-		{"cancel", isWip || isResolving},
+		{"reject", isMerged},
+		{"cancel", isWip},
 	}
 
 	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorAccent)
