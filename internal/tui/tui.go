@@ -393,7 +393,7 @@ func newSpawnTextInput() textinput.Model {
 	return ti
 }
 
-func renderMenu(title string, options []string, cursor int, hint string) string {
+func renderMenu(title string, options []string, cursor int) string {
 	titleLine := styles.TitleStyle.Render(title)
 
 	var items []string
@@ -407,8 +407,15 @@ func renderMenu(title string, options []string, cursor int, hint string) string 
 		items = append(items, lipgloss.JoinHorizontal(lipgloss.Top, cur, style.Render(opt)))
 	}
 	optionsList := lipgloss.JoinVertical(lipgloss.Left, items...)
-
-	hintLine := styles.HintStyle.Render(hint)
+	hintLine := lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		styles.AccentStyle.Render("j/k"),
+		styles.DefaultStyle.Render(" navigate · "),
+		styles.AccentStyle.Render("enter"),
+		styles.DefaultStyle.Render(" select · "),
+		styles.AccentStyle.Render("esc"),
+		styles.DefaultStyle.Render(" cancel"),
+	)
 
 	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", optionsList, "", hintLine, "")
 }
@@ -447,8 +454,7 @@ func (m TUIModel) View() string {
 	sections := []string{title, header, ""}
 
 	if m.mode == modeAgentSetup {
-		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
-			"j/k navigate · enter select · esc quit")
+		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor)
 		sections = append(sections, menu)
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
@@ -505,8 +511,7 @@ func (m TUIModel) View() string {
 	}
 
 	if m.mode == modeMenu {
-		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
-			"j/k navigate · enter select · esc cancel")
+		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor)
 		sections = append(sections, menu)
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
