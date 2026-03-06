@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,13 +15,22 @@ func Fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-// MustAbs returns the absolute path, or fatals.
+// MustAbs returns the absolute path, or fatals. Only use in main.go.
 func MustAbs(path string) string {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		Fatal("cannot resolve path: %s", path)
 	}
 	return abs
+}
+
+// Abs returns the absolute path or an error.
+func Abs(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve path %s: %w", path, err)
+	}
+	return abs, nil
 }
 
 // RunCmd runs a command and returns trimmed stdout.
@@ -41,6 +51,7 @@ func GitMust(dir string, args ...string) string {
 	out, _ := Git(dir, args...)
 	return out
 }
+
 
 // TmuxRun runs a tmux command.
 func TmuxRun(args ...string) error {
@@ -73,4 +84,40 @@ func IsDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// CopyDir recursively copies src into dst, preserving file permissions.
+// Existing files in dst are overwritten; existing directories are merged.
+func CopyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+		return copyFile(path, target, info.Mode())
+	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
+}
 

@@ -2,16 +2,15 @@ package ops
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xemotrix/augmux/internal/agent"
 	"github.com/xemotrix/augmux/internal/core"
-	"github.com/xemotrix/augmux/internal/tui"
 )
 
-func ensureSession(w io.Writer, repoRoot string) error {
+func ensureSession(repoRoot string) error {
 	sd := core.StateDir(repoRoot)
 	if core.IsDir(sd) {
 		return nil
@@ -19,16 +18,18 @@ func ensureSession(w io.Writer, repoRoot string) error {
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("not inside a tmux session. Run this from within tmux")
 	}
-	branch := core.GitMust(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
-	os.MkdirAll(sd, 0755)
-	os.MkdirAll(core.WorktreeBase(repoRoot), 0755)
+	branch, err := core.Git(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to determine current branch: %w", err)
+	}
+	os.MkdirAll(sd, 0o755)
+	os.MkdirAll(core.WorktreeBase(repoRoot), 0o755)
 	core.WriteFileContent(filepath.Join(sd, "source_branch"), branch)
 	core.WriteFileContent(filepath.Join(sd, "repo_root"), repoRoot)
-	fmt.Fprintf(w, "augmux session initialized (source branch: %s)\n", branch)
 	return nil
 }
 
-func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
+func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -38,66 +39,92 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	wtPath := filepath.Join(core.WorktreeBase(repoRoot), fmt.Sprintf("%s-%d", safe, idx))
 
 	td := filepath.Join(sd, fmt.Sprintf("task-%d", idx))
-	os.MkdirAll(td, 0755)
+	os.MkdirAll(td, 0o755)
 	core.WriteFileContent(filepath.Join(td, "description"), name)
 	core.WriteFileContent(filepath.Join(td, "branch"), branchName)
 	core.WriteFileContent(filepath.Join(td, "worktree"), wtPath)
 
 	core.GitMust(repoRoot, "worktree", "prune")
-	core.GitMust(repoRoot, "branch", branchName, srcBranch)
+	if _, err := core.Git(repoRoot, "branch", branchName, srcBranch); err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	}
 	if _, err := core.Git(repoRoot, "worktree", "add", wtPath, branchName); err != nil {
-		core.Fatal("failed to create worktree: %v", err)
+		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
-	// Write rules file for agents that support it.
 	rulesFile := filepath.Join(td, "rules.md")
 	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
+	if ag.ID == "cursor" {
+		srcCursor := filepath.Join(repoRoot, ".cursor")
+		if core.IsDir(srcCursor) {
+			core.CopyDir(srcCursor, filepath.Join(wtPath, ".cursor"))
+		}
+
+		cursorRulesDir := filepath.Join(wtPath, ".cursor", "rules")
+		os.MkdirAll(cursorRulesDir, 0o755)
+		mdcContent := agent.BuildCursorMDC(rulesContent)
+		core.WriteFileContent(filepath.Join(cursorRulesDir, "augmux.mdc"), mdcContent)
+
+		cursorCmdsDir := filepath.Join(wtPath, ".cursor", "commands")
+		os.MkdirAll(cursorCmdsDir, 0o755)
+		rebaseCmd := agent.BuildRebaseCommand(srcBranch)
+		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-rebase.md"), rebaseCmd)
+		rebaseYoloCmd := agent.BuildRebaseYoloCommand(srcBranch)
+		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-yolobase.md"), rebaseYoloCmd)
+
+		squashCmd := agent.BuildSquashCommand(srcBranch)
+		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-squash.md"), squashCmd)
+
+		gitignorePath := filepath.Join(wtPath, ".gitignore")
+		appendToGitignore(gitignorePath, ".cursor/")
+	}
+
 	winName := fmt.Sprintf("ax-%d-%s", idx, safe)
 	core.WriteFileContent(filepath.Join(td, "window"), winName)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
+	core.TmuxRun("set-option", "-w", "-t", winName, "@augmux_worktree", wtPath)
 	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
-		fmt.Sprintf("send-keys 'cd \"%s\" && clear' Enter", wtPath))
+		`run-shell 'tmux send-keys -t "#{pane_id}" "cd \"#{@augmux_worktree}\" && clear" Enter'`)
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
-
-	fmt.Fprintf(w, "  ✓ Agent %d: '%s' → branch %s\n", idx, name, branchName)
-	fmt.Fprintf(w, "    Window: %s\n", winName)
-	fmt.Fprintf(w, "    Worktree: %s\n", wtPath)
+	return nil
 }
 
-func Spawn(w io.Writer, repoRoot string, args []string) {
-	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(w, repoRoot); err != nil {
-		core.Fatal(err.Error())
-	}
-	ag := agent.ActiveAgent()
-	if len(args) == 0 {
-		name := tui.RunTextInput("Task name for new agent:")
-		if name == "" {
-			fmt.Fprintln(w, "Empty name — aborting.")
+// appendToGitignore adds an entry to a .gitignore file if it's not already present.
+func appendToGitignore(path, entry string) {
+	data, _ := os.ReadFile(path)
+	content := string(data)
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == entry {
 			return
 		}
-		spawnOne(w, repoRoot, name, ag)
-	} else {
-		for _, name := range args {
-			spawnOne(w, repoRoot, name, ag)
-		}
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Check status: augmux status")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		f.WriteString("\n")
+	}
+	f.WriteString(entry + "\n")
 }
 
-
-// SpawnByName spawns a single agent with the given name (no interactive prompt).
-func SpawnByName(w io.Writer, repoRoot string, name string) {
-	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(w, repoRoot); err != nil {
-		core.Fatal(err.Error())
+// SpawnByName spawns a single agent with the given name.
+func SpawnByName(repoRoot string, name string) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
 	}
-	ag := agent.ActiveAgent()
-	spawnOne(w, repoRoot, name, ag)
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Check status: augmux status")
+	if err := ensureSession(repoRoot); err != nil {
+		return err
+	}
+	ag, err := agent.ActiveAgent()
+	if err != nil {
+		return err
+	}
+	return spawnOne(repoRoot, name, ag)
 }

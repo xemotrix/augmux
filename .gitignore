@@ -1,3 +1,4 @@
 bin/
 .augmux-state/
 .augmux-worktrees/
+.cursor/

@@ -12,7 +12,7 @@ Each agent gets its own isolated branch and worktree, so they can work on differ
 - **tmux** — must be running inside a tmux session
 - **git** — the project must be a git repository
 - **Agent CLI** — one of the supported AI agents:
-  - **auggie** (Augment Code) — `auggie` command
+  - **Auggie** (Augment Code) — `auggie` command
   - **Cursor** (Cursor AI) — `agent` command (install via `curl https://cursor.com/install -fsS | bash`)
 
 ## Install
@@ -29,122 +29,102 @@ cd augmux
 go build -o bin/augmux .
 ```
 
+## Usage
+
+augmux is driven entirely through an interactive TUI. Run it from within a tmux session inside any git repo:
+
+```bash
+augmux
+```
+
+On first launch, you'll be prompted to pick which agent CLI to use. The choice is saved to `~/.config/augmux/config.json`.
+
+The only other commands are:
+
+```bash
+augmux nuke    # force cleanup — discard all agents without merging
+augmux help    # show help
+```
+
+## TUI
+
+The dashboard shows a responsive grid of agent cards. Each card displays:
+
+- **Task description** and **activity indicator** (working/idle, detected by monitoring tmux pane output)
+- **Branch name**, **commits ahead** of the source branch, and **uncommitted file count**
+- **Status badge** — `wip`, `merged`, `resolving`, or `conflicts`
+- **Color-coded borders** — green (idle with commits), yellow (working), cyan (merged), red (conflicts/resolving), gray (idle, no commits)
+
+### Keybindings
+
+| Key | Action |
+|---|---|
+| `h` `j` `k` `l` / arrows | Navigate between agent cards |
+| `s` | **Spawn** — enter a task name and launch a new agent |
+| `m` | **Merge** — squash-merge the selected agent into the source branch |
+| `a` | **Accept** — confirm a merge and clean up the agent |
+| `r` | **Reject** — undo the merge commit; agent stays alive for fixes |
+| `c` | **Cancel** — discard an agent and all its changes |
+| `enter` | **Focus** — switch to the agent's tmux window |
+| `q` / `ctrl+c` | Quit the TUI |
+
+Actions are context-sensitive — they only activate when applicable to the selected agent's state (e.g. merge is only available for `wip` agents that have commits).
+
 ## How It Works
 
-augmux manages a session tied to your current git branch (the "source branch"). When you spawn agents:
+augmux manages a session tied to your current git branch (the "source branch"). When you spawn an agent:
 
 1. A new git branch is created from the source branch (e.g. `augmux/fix-auth-1`)
 2. A git worktree is created in `.augmux-worktrees/` pointing to that branch
-3. A new tmux window opens in the worktree directory with the configured agent CLI running
+3. A rules file with context about the task, branch, and worktree is injected into the agent's session
+4. A new tmux window opens in the worktree directory with the agent CLI running
 
-Each agent works in complete isolation. When you're ready, you squash-merge their branch back into the source branch, review the result, and accept or reject it.
+Each agent works in complete isolation. When you merge, augmux squash-merges the agent's branch into the source branch. You then review the result and accept or reject it.
 
-### State
+### Agent rules injection
 
-Session state is stored in `.augmux-state/` at the repo root. Each agent has a `task-N/` directory containing its description, branch name, worktree path, and merge status. Both `.augmux-state/` and `.augmux-worktrees/` are gitignored.
+augmux injects a rules file into each agent session so the agent knows its task, branch, and constraints (e.g. "don't push to remote"). For Auggie, this is passed via the `--rules` flag. For Cursor, it's written to `.cursor/rules/augmux.mdc` in the agent's worktree.
 
-## Commands
+### Merge flow
 
-### Spawning agents
+Merging uses a two-phase flow: **merge → review → accept/reject**.
 
-```bash
-# Shows a text input to write a prompt, then spawn an agent with it
-augmux spawn
-
-# Spawn one or more agents by name (opens agent CLI with no initial prompt)
-augmux spawn "fix auth bug"
-augmux spawn "add tests" "update docs" "refactor api"
-```
-
-### Checking status
-
-```bash
-augmux status            # one-shot grid view
-augmux status --watch    # live dashboard (alias for 'augmux tui', also -w)
-augmux tui               # interactive dashboard (navigate, act on agents)
-```
-
-### Merging
-
-Merge uses a two-phase flow: **merge → review → accept/reject**.
-
-```bash
-# Merge a specific agent (squash merge into source branch)
-augmux merge 1
-
-# If there are multiple agents, shows an interactive picker
-augmux merge
-
-# Merge all unmerged agents
-augmux merge --all
-```
-
-After merging, the agent's tmux window and worktree are kept alive. You can review the changes, run tests, etc.
-
-### Accepting & Rejecting
-
-```bash
-# Happy with the merge — clean up the agent (kills window, removes worktree + branch)
-augmux accept 1
-augmux accept --all
-
-# If there are multiple agents, shows an interactive picker
-augmux accept
-augmux reject
-
-# Not happy — undo the merge commit, agent stays alive for fixes
-augmux reject 1
-```
-
-After rejecting, switch to the agent's window, fix the issue, commit, and run `augmux merge` again.
+- **Merge** squash-merges the agent's branch. If there are uncommitted changes in the worktree, they are auto-committed first.
+- **Accept** confirms the merge and tears down the agent (kills the tmux window, removes the worktree and branch).
+- **Reject** undoes the merge commit. The agent stays alive so you can switch to its window, fix the issue, and merge again.
 
 ### Conflict resolution
 
-When a merge has conflicts, you get two options:
+When a merge has conflicts, the TUI presents two options:
 
-1. **Continue** — conflict markers are left in the working tree for manual resolution. After fixing, `git add`, `git commit`, then `augmux merge <id>` again.
-2. **Abort** — resets the working tree, agent is preserved for retry.
+1. **Continue** — conflict markers are left in the working tree for manual resolution
+2. **Abort** — resets the working tree; the agent is preserved for retry
 
-### Cancelling
+### State
 
-```bash
-# Remove an agent and discard all its changes (no merge)
-augmux cancel 1
-
-# If there are multiple agents, shows an interactive picker
-augmux cancel
-```
-
-### Nuking
-
-```bash
-# Force cleanup — discard everything without merging
-augmux nuke
-```
+Session state is stored in `.augmux-state/` at the repo root. Each agent has a `task-N/` directory containing its description, branch name, worktree path, window name, and merge status. Both `.augmux-state/` and `.augmux-worktrees/` are gitignored.
 
 ## Typical Workflow
 
 ```bash
-# Start a tmux session and cd into your project
 tmux
 cd ~/projects/myapp
 
-# Spawn some agents
-augmux spawn "add user authentication"
-augmux spawn "write API tests"
-augmux spawn "refactor database layer"
+# Launch the TUI
+augmux
 
-# Switch between windows with Ctrl-b n / Ctrl-b p
-# Split panes with Ctrl-b % — new panes open in the agent's worktree
+# Press 's' to spawn agents — enter task names like:
+#   "add user authentication"
+#   "write API tests"
+#   "refactor database layer"
 
-# Check progress
-augmux status
+# The TUI shows all agents with live activity status
+# Navigate with h/j/k/l, press 'enter' to jump to an agent's window
 
-# Agent 1 is done — merge it
-augmux merge 1
-# Review the squashed diff...
-augmux accept 1    # looks good
-# or
-augmux reject 1    # nope, fix and re-merge
+# When an agent finishes, select it and press 'm' to merge
+# Review the squashed diff, then:
+#   'a' to accept (looks good — clean up)
+#   'r' to reject (needs fixes — agent stays alive)
 
+# Press 'q' to quit the TUI when done
 ```

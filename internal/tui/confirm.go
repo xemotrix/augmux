@@ -2,33 +2,34 @@ package tui
 
 import (
 	"fmt"
-	"strings"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/xemotrix/augmux/internal/styles"
 )
 
 var (
 	confirmActiveStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(colorWhite).
-				Background(colorAccent).
+				Foreground(styles.ColorWhite).
+				Background(styles.ColorAccent).
 				Padding(0, 2)
 
 	confirmInactiveStyle = lipgloss.NewStyle().
-				Foreground(colorGray).
+				Foreground(styles.ColorGray).
 				Padding(0, 2)
 
 	confirmWarningStyle = lipgloss.NewStyle().
-				Foreground(colorRed).
+				Foreground(styles.ColorRed).
 				Bold(true)
 )
 
 type confirmModel struct {
-	message   string
+	message     string
 	yesSelected bool
-	confirmed bool
-	quitting  bool
+	confirmed   bool
+	quitting    bool
 }
 
 func (m confirmModel) Init() tea.Cmd { return nil }
@@ -64,10 +65,8 @@ func (m confirmModel) View() string {
 	if m.quitting {
 		return ""
 	}
-	var b strings.Builder
 
-	b.WriteString(confirmWarningStyle.Render("⚠ " + m.message))
-	b.WriteString("\n\n")
+	warning := confirmWarningStyle.Render("⚠ " + m.message)
 
 	yes := confirmInactiveStyle.Render("Yes")
 	no := confirmInactiveStyle.Render("No")
@@ -77,13 +76,15 @@ func (m confirmModel) View() string {
 		no = confirmActiveStyle.Render("No")
 	}
 
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yes, "    ", no)
-	b.WriteString(lipgloss.PlaceHorizontal(60, lipgloss.Center, buttons))
-	b.WriteString("\n\n")
-	b.WriteString(pickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel"))
-	b.WriteString("\n")
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center,
+		yes,
+		lipgloss.NewStyle().Width(4).Render(""),
+		no,
+	)
+	buttonRow := lipgloss.PlaceHorizontal(60, lipgloss.Center, buttons)
+	hint := styles.PickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel")
 
-	return b.String()
+	return lipgloss.JoinVertical(lipgloss.Left, warning, "", buttonRow, "", hint, "")
 }
 
 // RunConfirm shows a yes/no confirmation dialog. Returns true if confirmed.
@@ -92,7 +93,7 @@ func RunConfirm(message string) bool {
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
-		fmt.Printf("TUI error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 		return false
 	}
 	return final.(confirmModel).confirmed

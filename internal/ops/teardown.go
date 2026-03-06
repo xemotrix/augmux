@@ -2,78 +2,71 @@ package ops
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-func teardownOne(w io.Writer, repoRoot string, idx int) {
+func teardownOne(repoRoot string, idx int) {
 	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		return
 	}
 
-	// Kill tmux window (use stored window name)
 	core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 
-	// Remove worktree
 	if core.IsDir(ag.Worktree) {
 		core.GitMust(repoRoot, "worktree", "remove", "--force", ag.Worktree)
 	}
 	core.GitMust(repoRoot, "worktree", "prune")
 
-	// Delete branch
+	core.ClearConflictCache(ag.Branch)
 	core.GitMust(repoRoot, "branch", "-D", ag.Branch)
 
-	// Remove state
 	os.RemoveAll(core.TaskDir(repoRoot, idx))
 
-	fmt.Fprintf(w, "  ✓ Agent %d torn down (branch: %s)\n", idx, ag.Branch)
-	maybeCleanupSession(w, repoRoot)
+	maybeCleanupSession(repoRoot)
 }
 
 // CancelOne removes a single agent, discarding all its changes.
-func CancelOne(w io.Writer, repoRoot string, idx int) {
-	repoRoot = core.MustAbs(repoRoot)
+func CancelOne(repoRoot string, idx int) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
-		core.Fatal("Agent %d not found.", idx)
+		return fmt.Errorf("agent %d not found: %w", idx, err)
 	}
 
-	fmt.Fprintln(w, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Fprintf(w, "Cancelling agent %d: %s\n", idx, ag.Description)
-
 	if ag.MergeCommit != "" {
-		currentHead := core.GitMust(repoRoot, "rev-parse", "HEAD")
+		currentHead, err := core.Git(repoRoot, "rev-parse", "HEAD")
+		if err != nil {
+			return fmt.Errorf("failed to get HEAD: %w", err)
+		}
 		if currentHead == ag.MergeCommit {
-			core.GitMust(repoRoot, "reset", "--hard", "HEAD~1")
-			fmt.Fprintln(w, "  ✓ Merge commit undone.")
-		} else {
-			fmt.Fprintf(w, "  ⚠ Merge commit %s is not at HEAD — skipping revert.\n", ag.MergeCommit)
-			fmt.Fprintf(w, "    You may need to manually revert: git revert %s\n", ag.MergeCommit)
+			if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD~1"); err != nil {
+				return fmt.Errorf("failed to reset merge commit: %w", err)
+			}
 		}
 	}
 
-	if ag.Resolving != "" {
-		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
-		fmt.Fprintln(w, "  ✓ Conflict state cleared.")
-	}
-
-	teardownOne(w, repoRoot, idx)
-	fmt.Fprintf(w, "  ✓ Agent %d cancelled and removed.\n", idx)
+	teardownOne(repoRoot, idx)
+	return nil
 }
 
-func TeardownAll(w io.Writer, repoRoot string) {
-	repoRoot = core.MustAbs(repoRoot)
+// TeardownAll removes all agents, worktrees, branches, and session state.
+func TeardownAll(repoRoot string) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	sd := core.StateDir(repoRoot)
 	if !core.IsDir(sd) {
-		core.Fatal("No augmux session found.")
+		return fmt.Errorf("no augmux session found")
 	}
-
-	fmt.Fprintln(w, "Tearing down augmux session...")
 
 	for _, idx := range core.ListAgents(repoRoot) {
 		ag, err := core.ReadAgent(repoRoot, idx)
@@ -83,23 +76,20 @@ func TeardownAll(w io.Writer, repoRoot string) {
 		core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 		if core.IsDir(ag.Worktree) {
 			core.GitMust(repoRoot, "worktree", "remove", "--force", ag.Worktree)
-			fmt.Fprintf(w, "    ✓ Removed worktree: %s\n", filepath.Base(ag.Worktree))
 		}
 		core.GitMust(repoRoot, "branch", "-D", ag.Branch)
-		fmt.Fprintf(w, "    ✓ Deleted branch: %s\n", ag.Branch)
 	}
 
 	core.GitMust(repoRoot, "worktree", "prune")
 	os.Remove(core.WorktreeBase(repoRoot))
 	os.RemoveAll(sd)
-	fmt.Fprintln(w, "  ✓ Full teardown complete.")
+	return nil
 }
 
-func maybeCleanupSession(w io.Writer, repoRoot string) {
+func maybeCleanupSession(repoRoot string) {
 	agents := core.ListAgents(repoRoot)
 	if len(agents) == 0 {
 		os.Remove(core.WorktreeBase(repoRoot))
 		os.RemoveAll(core.StateDir(repoRoot))
-		fmt.Fprintln(w, "  No agents remaining — session cleaned up.")
 	}
 }
