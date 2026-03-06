@@ -44,9 +44,10 @@ func BuildCursorMDC(rulesContent string) string {
 	return fmt.Sprintf("---\ndescription: augmux agent rules\nalwaysApply: true\n---\n%s", rulesContent)
 }
 
-// RebaseCommandTemplate is the Cursor slash command prompt for /augmux-rebase.
+// RebaseYoloCommandTemplate is the Cursor slash command prompt for /augmux-rebase-yolo.
+// This version automatically resolves conflicts without user confirmation.
 // Placeholder: {{SOURCE_BRANCH}}
-const RebaseCommandTemplate = `Rebase your current branch onto the latest ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch).
+const RebaseYoloCommandTemplate = `Rebase your current branch onto the latest ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch).
 
 Follow these steps exactly:
 
@@ -80,7 +81,82 @@ Follow these steps exactly:
 Do NOT use ` + "`git rebase --abort`" + ` unless you truly cannot resolve a conflict. Do NOT push to any remote.
 `
 
-// BuildRebaseCommand renders the rebase command template for the given source branch.
+// BuildRebaseYoloCommand renders the yolo rebase command template for the given source branch.
+func BuildRebaseYoloCommand(sourceBranch string) string {
+	return strings.Replace(RebaseYoloCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+}
+
+// RebaseCommandTemplate is the Cursor slash command prompt for /augmux-rebase.
+// This version analyzes conflicts first, presents a summary, and waits for user
+// confirmation before proceeding.
+// Placeholder: {{SOURCE_BRANCH}}
+const RebaseCommandTemplate = `Analyze and rebase your current branch onto ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch) **with user confirmation**.
+
+Follow these steps exactly:
+
+## Phase 1 — Analysis (do NOT start the rebase yet)
+
+1. **Commit uncommitted work.** If there are any uncommitted changes, stage and commit them:
+` + "   ```" + `
+   git add -A && git commit -m "augmux: auto-commit before rebase"
+` + "   ```" + `
+
+2. **Preview what the rebase will do.** Run:
+` + "   ```" + `
+   git diff {{SOURCE_BRANCH}}...HEAD --stat
+` + "   ```" + `
+   This shows the files you changed on your branch.
+
+3. **Check for potential conflicts.** Run:
+` + "   ```" + `
+   git merge-tree --write-tree {{SOURCE_BRANCH}} HEAD
+` + "   ```" + `
+   If this command **succeeds** (exit code 0), there will be no conflicts. Tell the user and skip to Phase 2 immediately.
+
+   If this command **fails**, there will be conflicts. Now analyze them:
+   - Run ` + "`git merge-tree --write-tree --name-only {{SOURCE_BRANCH}} HEAD 2>&1`" + ` to identify which files conflict.
+   - For each conflicting file, examine both versions:
+     - **Source branch version:** ` + "`git show {{SOURCE_BRANCH}}:<file>`" + `
+     - **Your branch version:** ` + "`git show HEAD:<file>`" + `
+   - Understand what each side changed and why.
+
+4. **Present a conflict summary to the user.** Format it clearly:
+   - List each conflicting file.
+   - For each file, briefly explain what **your branch** changed vs. what **` + "`{{SOURCE_BRANCH}}`" + `** changed.
+   - For conflicts that have an **obvious resolution** (e.g., both sides added different imports, or changes are in non-overlapping sections), state what you would do.
+   - For conflicts that are **ambiguous** (e.g., both sides modified the same function differently, or a design choice is involved), **ask the user a specific question** about how they want to resolve it.
+
+5. **Wait for the user to confirm.** Ask:
+   > "Ready to proceed with the rebase using the strategy above? (yes/no)"
+
+   Do NOT proceed until the user confirms. If the user says no or asks for changes, adjust your plan and ask again.
+
+## Phase 2 — Execute the rebase
+
+6. **Start the rebase:**
+` + "   ```" + `
+   git rebase {{SOURCE_BRANCH}}
+` + "   ```" + `
+
+7. **If there are conflicts**, for each conflicted file:
+   - Open the file and look for conflict markers (` + "`<<<<<<<`" + `, ` + "`=======`" + `, ` + "`>>>>>>>`" + `).
+   - Resolve according to the plan confirmed by the user in Phase 1. Integrate **both** sides where appropriate.
+   - Stage the resolved file:
+` + "     ```" + `
+     git add <file>
+` + "     ```" + `
+   - Continue the rebase:
+` + "     ```" + `
+     GIT_EDITOR=true git rebase --continue
+` + "     ```" + `
+   - If more conflicts appear, repeat this step.
+
+8. After the rebase completes, verify the build still works and your changes are intact.
+
+Do NOT use ` + "`git rebase --abort`" + ` unless the user explicitly asks you to. Do NOT push to any remote.
+`
+
+// BuildRebaseCommand renders the interactive rebase command template for the given source branch.
 func BuildRebaseCommand(sourceBranch string) string {
 	return strings.Replace(RebaseCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
 }

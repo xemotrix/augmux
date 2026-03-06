@@ -839,7 +839,7 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 					}
 				}
 				return ActionDone{
-					Lines: []string{fmt.Sprintf("Typed rebase command for %s — press Enter to run", agentLabel)},
+					Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
 					Level: ToastSuccess,
 				}
 			}
