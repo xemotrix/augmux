@@ -2,7 +2,7 @@
 
 Run multiple AI coding agents in parallel using tmux windows and git worktrees.
 
-Each agent gets its own isolated branch and worktree, so they can work on different tasks simultaneously without stepping on each other. When they're done, you merge their work back with a two-phase review flow.
+Each agent gets its own isolated branch, worktree and tmux window, so they can work on different tasks simultaneously without stepping on each other. When they're done, you merge their work back with a two-phase review flow. You can interact with each agent in their tmux window to iterate independently with each one.
 
 ![augmux](docs/augmux.png)
 
