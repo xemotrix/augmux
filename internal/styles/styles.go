@@ -58,9 +58,9 @@ var (
 	HeaderValStyle = lipgloss.NewStyle().Foreground(ColorWhite)
 )
 
-const branchIcon = "\uf126" // Nerd Font code-fork icon
-
 // RenderBranch renders a branch name with the branch icon prefix.
 func RenderBranch(name string) string {
+	const branchIcon = "\ue725" // Nerd Font code-fork icon
+
 	return BranchStyle.Render(branchIcon + " " + name)
 }
