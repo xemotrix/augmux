@@ -26,6 +26,7 @@ var (
 	BadgeWip       = lipgloss.NewStyle().Bold(true).Foreground(ColorGreen)
 	BadgeMerged    = lipgloss.NewStyle().Bold(true).Foreground(ColorCyan)
 	BadgeConflicts = lipgloss.NewStyle().Bold(true).Foreground(ColorRed)
+	BadgeWorking   = lipgloss.NewStyle().Bold(true).Foreground(ColorYellow)
 
 	// Labels and values
 	ValueStyle  = lipgloss.NewStyle().Foreground(ColorWhite)
@@ -39,6 +40,11 @@ var (
 	DisabledStyle = lipgloss.NewStyle().Foreground(ColorDimGray)
 	HintStyle     = lipgloss.NewStyle().Foreground(ColorDimGray).Italic(true)
 	DefaultStyle  = lipgloss.NewStyle().Foreground(ColorGray)
+
+	// Confirm Styles
+	ConfirmActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(ColorWhite).Background(ColorAccent).Padding(0, 2)
+	ConfirmInactiveStyle = lipgloss.NewStyle().Foreground(ColorGray).Padding(0, 2)
+	ConfirmWarningStyle  = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
 
 	// Toast notifications
 	ToastInfo    = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)

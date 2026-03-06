@@ -9,22 +9,6 @@ import (
 	"github.com/xemotrix/augmux/internal/styles"
 )
 
-var (
-	confirmActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(styles.ColorWhite).
-				Background(styles.ColorAccent).
-				Padding(0, 2)
-
-	confirmInactiveStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorGray).
-				Padding(0, 2)
-
-	confirmWarningStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorRed).
-				Bold(true)
-)
-
 type confirmModel struct {
 	message     string
 	yesSelected bool
@@ -66,14 +50,15 @@ func (m confirmModel) View() string {
 		return ""
 	}
 
-	warning := confirmWarningStyle.Render("⚠ " + m.message)
+	warning := styles.ConfirmWarningStyle.Render("⚠ " + m.message)
 
-	yes := confirmInactiveStyle.Render("Yes")
-	no := confirmInactiveStyle.Render("No")
+	var yes, no string
 	if m.yesSelected {
-		yes = confirmActiveStyle.Render("Yes")
+		yes = styles.ConfirmActiveStyle.Render("Yes")
+		no = styles.ConfirmInactiveStyle.Render("No")
 	} else {
-		no = confirmActiveStyle.Render("No")
+		yes = styles.ConfirmInactiveStyle.Render("Yes")
+		no = styles.ConfirmActiveStyle.Render("No")
 	}
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center,

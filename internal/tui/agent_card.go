@@ -9,54 +9,50 @@ import (
 	"github.com/xemotrix/augmux/internal/styles"
 )
 
-func RunAgentCard(
+type AgentCard struct{}
+
+func (ac *AgentCard) View(
 	a *core.Agent,
 	spinnerFrame string,
-	selected ...bool,
+	selected bool,
 ) string {
-	sel := len(selected) > 0 && selected[0]
-
-	borderColor := agentBorderColor(a)
+	stateColor := ac.borderColor(a)
+	bdrStyle := lipgloss.NewStyle().Foreground(stateColor)
 
 	var border lipgloss.Border
-	if sel {
-		border = lipgloss.DoubleBorder()
+	if selected {
+		border = lipgloss.ThickBorder()
+		bdrStyle = bdrStyle.Bold(true)
 	} else {
 		border = lipgloss.RoundedBorder()
 	}
 
-	bdr := lipgloss.NewStyle().Foreground(borderColor)
-	if sel {
-		bdr = bdr.Bold(true)
-	}
-
 	// Top border — manually constructed to embed status badge on the left.
-	statusRaw := AgentStatusRaw(a)
-	statusStyled := AgentStatusStyled(a, statusRaw)
+	statusBadge := ac.statusBadge(a, stateColor, selected)
 
 	topLeft := border.TopLeft + border.Top
 	topRight := border.Top + border.TopRight
-	used := lipgloss.Width(topLeft) + 1 + lipgloss.Width(statusRaw) + 1 + lipgloss.Width(topRight)
+	used := lipgloss.Width(topLeft) + 1 + lipgloss.Width(statusBadge) + 1 + lipgloss.Width(topRight)
 	fill := max(cardWidth-used, 1)
 	topLine := lipgloss.JoinHorizontal(lipgloss.Top,
-		bdr.Render(topLeft),
+		bdrStyle.Render(topLeft),
 		lipgloss.NewStyle().Render(" "),
-		statusStyled,
+		statusBadge,
 		lipgloss.NewStyle().Render(" "),
-		bdr.Render(strings.Repeat(border.Top, fill)),
-		bdr.Render(topRight),
+		bdrStyle.Render(strings.Repeat(border.Top, fill)),
+		bdrStyle.Render(topRight),
 	)
 
 	// Card body — lipgloss handles side borders, bottom border, and padding.
 	bodyStyle := lipgloss.NewStyle().
 		Border(border, false, true, true, true).
-		BorderForeground(borderColor).
+		BorderForeground(stateColor).
 		Width(cardInner).
 		Padding(0, 1)
 
 	// Row 1: description (left-aligned) + activity indicator (right-aligned)
 	activityStr := activityIndicator(a, spinnerFrame)
-	activityWidth := lipgloss.Width(activityRawStr(a))
+	activityWidth := lipgloss.Width(activityStr)
 	maxName := max(textWidth-activityWidth-1, 10)
 	nameLeft := lipgloss.NewStyle().
 		Width(textWidth - activityWidth).
@@ -89,47 +85,44 @@ func activityIndicator(a *core.Agent, spinnerFrame string) string {
 	return lipgloss.NewStyle().Foreground(styles.ColorDimGray).Render("○ idle")
 }
 
-func activityRawStr(a *core.Agent) string {
-	if a.Activity == core.ActivityWorking {
-		return "⠋ working"
-	}
-	return "○ idle"
-}
-
-func agentBorderColor(a *core.Agent) lipgloss.TerminalColor {
-	if a.MergeCommit != "" {
-		return styles.ColorCyan
-	}
-	if a.HasConflicts {
-		return styles.ColorRed
-	}
-	if a.Activity == core.ActivityWorking {
+func (ac *AgentCard) borderColor(a *core.Agent) lipgloss.TerminalColor {
+	switch a.Status() {
+	case core.AgentStatusIdle:
+		if a.HasCommits() {
+			return styles.ColorGreen
+		}
+		return styles.ColorDimGray
+	case core.AgentStatusWorking:
 		return styles.ColorYellow
+	case core.AgentStatusConflict:
+		return styles.ColorRed
+	case core.AgentStatusMerged:
+		return styles.ColorCyan
+	default:
+		return styles.ColorDimGray
 	}
-	if a.CommitsAhead > 0 {
-		return styles.ColorGreen
-	}
-	return styles.ColorDimGray
 }
 
-func AgentStatusRaw(a *core.Agent) string {
-	if a.MergeCommit != "" {
-		return "● merged"
+func (ac *AgentCard) statusBadge(a *core.Agent, color lipgloss.TerminalColor, selected bool) string {
+	var status string
+	switch a.Status() {
+	case core.AgentStatusWorking:
+		status = "● working"
+	case core.AgentStatusWip:
+		status = "● wip"
+	case core.AgentStatusIdle:
+		status = "● idle"
+	case core.AgentStatusConflict:
+		status = "● conflict"
+	case core.AgentStatusMerged:
+		status = "● merged"
+	default:
+		status = "error"
 	}
-	if a.HasConflicts {
-		return "● conflicts"
-	}
-	return "● wip"
-}
-
-func AgentStatusStyled(a *core.Agent, text string) string {
-	if a.MergeCommit != "" {
-		return styles.BadgeMerged.Render(text)
-	}
-	if a.HasConflicts {
-		return styles.BadgeConflicts.Render(text)
-	}
-	return styles.BadgeWip.Render(text)
+	return lipgloss.NewStyle().
+		Bold(selected).
+		Foreground(color).
+		Render(status)
 }
 
 func truncate(s string, n int) string {

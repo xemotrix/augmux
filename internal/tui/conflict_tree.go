@@ -216,7 +216,7 @@ func renderConflictTree(state *conflictTreeState) string {
 }
 
 // viewConflictTree renders the scrollable conflict tree view.
-func viewConflictTree(state *conflictTreeState, width, height int) string {
+func viewConflictTree(state *conflictTreeState, height int) string {
 	lines := strings.Split(state.rendered, "\n")
 	total := len(lines)
 

@@ -50,6 +50,7 @@ type TUIModel struct {
 	menuCursor    int                                  // inline menu cursor
 	menuCallback  func(int) ActionResult               // inline menu callback
 	actionBar     ActionBar
+	agentCard     AgentCard
 
 	conflictTree *conflictTreeState // non-nil when viewing conflict tree
 }
@@ -425,7 +426,7 @@ func (m TUIModel) View() string {
 	}
 
 	if m.mode == modeConflictTree && m.conflictTree != nil {
-		return viewConflictTree(m.conflictTree, m.width, m.height)
+		return viewConflictTree(m.conflictTree, m.height)
 	}
 
 	srcBranch := m.srcBranch
@@ -465,7 +466,7 @@ func (m TUIModel) View() string {
 		spinnerFrame := m.spinner.View()
 		var cards []string
 		for i, a := range m.agents {
-			cards = append(cards, RunAgentCard(a, spinnerFrame, i == m.cursor))
+			cards = append(cards, m.agentCard.View(a, spinnerFrame, i == m.cursor))
 		}
 
 		cols := m.cols()

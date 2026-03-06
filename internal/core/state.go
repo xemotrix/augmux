@@ -59,6 +59,7 @@ const (
 	AgentStatusWip
 	AgentStatusMerged
 	AgentStatusIdle
+	AgentStatusWorking
 	AgentStatusConflict
 )
 
@@ -75,6 +76,9 @@ func (a *Agent) Status() AgentStatus {
 	}
 	if a.MergeCommit != "" {
 		return AgentStatusMerged
+	}
+	if a.Activity == ActivityWorking {
+		return AgentStatusWorking
 	}
 	if a.Activity == ActivityIdle {
 		return AgentStatusIdle
