@@ -1,41 +1,31 @@
 package ops
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-func teardownOne(repoRoot string, idx int) error {
+func teardownOne(repoRoot string, idx int) {
 	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
-		return fmt.Errorf("agent %d not found: %w", idx, err)
+		return
 	}
-
-	var errs []error
 
 	core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 
 	if core.IsDir(ag.Worktree) {
-		if _, err := core.Git(repoRoot, "worktree", "remove", "--force", ag.Worktree); err != nil {
-			errs = append(errs, fmt.Errorf("worktree remove: %w", err))
-		}
+		core.GitMust(repoRoot, "worktree", "remove", "--force", ag.Worktree)
 	}
-	core.Git(repoRoot, "worktree", "prune")
+	core.GitMust(repoRoot, "worktree", "prune")
 
 	core.ClearConflictCache(ag.Branch)
-	if _, err := core.Git(repoRoot, "branch", "-D", ag.Branch); err != nil {
-		errs = append(errs, fmt.Errorf("branch delete: %w", err))
-	}
+	core.GitMust(repoRoot, "branch", "-D", ag.Branch)
 
-	if err := os.RemoveAll(core.TaskDir(repoRoot, idx)); err != nil {
-		errs = append(errs, fmt.Errorf("remove task dir: %w", err))
-	}
+	os.RemoveAll(core.TaskDir(repoRoot, idx))
 
 	maybeCleanupSession(repoRoot)
-	return errors.Join(errs...)
 }
 
 // CancelOne removes a single agent, discarding all its changes.
@@ -68,7 +58,8 @@ func CancelOne(repoRoot string, idx int) error {
 		}
 	}
 
-	return teardownOne(repoRoot, idx)
+	teardownOne(repoRoot, idx)
+	return nil
 }
 
 // TeardownAll removes all agents, worktrees, branches, and session state.
@@ -83,7 +74,6 @@ func TeardownAll(repoRoot string) error {
 		return fmt.Errorf("no augmux session found")
 	}
 
-	var errs []error
 	for _, idx := range core.ListAgents(repoRoot) {
 		ag, err := core.ReadAgent(repoRoot, idx)
 		if err != nil {
@@ -91,19 +81,15 @@ func TeardownAll(repoRoot string) error {
 		}
 		core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 		if core.IsDir(ag.Worktree) {
-			if _, err := core.Git(repoRoot, "worktree", "remove", "--force", ag.Worktree); err != nil {
-				errs = append(errs, fmt.Errorf("worktree remove %s: %w", ag.Worktree, err))
-			}
+			core.GitMust(repoRoot, "worktree", "remove", "--force", ag.Worktree)
 		}
-		if _, err := core.Git(repoRoot, "branch", "-D", ag.Branch); err != nil {
-			errs = append(errs, fmt.Errorf("branch delete %s: %w", ag.Branch, err))
-		}
+		core.GitMust(repoRoot, "branch", "-D", ag.Branch)
 	}
 
-	core.Git(repoRoot, "worktree", "prune")
+	core.GitMust(repoRoot, "worktree", "prune")
 	os.Remove(core.WorktreeBase(repoRoot))
 	os.RemoveAll(sd)
-	return errors.Join(errs...)
+	return nil
 }
 
 func maybeCleanupSession(repoRoot string) {

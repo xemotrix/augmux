@@ -33,16 +33,10 @@ func Abs(path string) (string, error) {
 	return abs, nil
 }
 
-// RunCmd runs a command and returns trimmed stdout. If the command fails,
-// stderr is included in the returned error for diagnostics.
+// RunCmd runs a command and returns trimmed stdout.
 func RunCmd(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	out, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-			return strings.TrimSpace(string(out)), fmt.Errorf("%s: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
-		}
-	}
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -58,21 +52,6 @@ func GitMust(dir string, args ...string) string {
 	return out
 }
 
-// RunCmdSplit runs a command and returns stdout and stderr separately.
-func RunCmdSplit(name string, args ...string) (stdout, stderr string, err error) {
-	cmd := exec.Command(name, args...)
-	var outBuf, errBuf strings.Builder
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-	err = cmd.Run()
-	return strings.TrimSpace(outBuf.String()), strings.TrimSpace(errBuf.String()), err
-}
-
-// GitWithStderr runs a git command and returns stdout and stderr separately.
-func GitWithStderr(dir string, args ...string) (stdout, stderr string, err error) {
-	fullArgs := append([]string{"-C", dir}, args...)
-	return RunCmdSplit("git", fullArgs...)
-}
 
 // TmuxRun runs a tmux command.
 func TmuxRun(args ...string) error {

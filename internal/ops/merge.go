@@ -53,11 +53,15 @@ func MergeOne(repoRoot string, idx int) error {
 		if err != nil {
 			return fmt.Errorf("failed to get HEAD sha: %w", err)
 		}
-		if err := core.WriteFileContent(td+"/merge_commit", sha); err != nil {
-			return fmt.Errorf("failed to record merge commit: %w", err)
-		}
+		core.WriteFileContent(td+"/merge_commit", sha)
 		os.Remove(td + "/resolving")
 		return nil
+	}
+
+	// Ensure the main repo working tree is clean before we touch it.
+	mainStatus, _ := core.Git(repoRoot, "status", "--porcelain")
+	if mainStatus != "" {
+		return fmt.Errorf("main repo has uncommitted changes; commit or stash before merging")
 	}
 
 	// Auto-commit uncommitted changes in worktree
@@ -73,6 +77,11 @@ func MergeOne(repoRoot string, idx int) error {
 		}
 	}
 
+	// Checkout source branch
+	if _, err := core.Git(repoRoot, "checkout", srcBranch); err != nil {
+		return fmt.Errorf("failed to checkout %s: %w", srcBranch, err)
+	}
+
 	// Count ahead
 	ahead, err := core.Git(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
 	if err != nil || ahead == "0" || ahead == "" {
@@ -80,40 +89,24 @@ func MergeOne(repoRoot string, idx int) error {
 		return nil
 	}
 
+	// Merge message
 	lastMsg := core.GitMust(repoRoot, "log", "-1", "--format=%s", ag.Branch)
 	mergeMsg := "augmux: " + lastMsg
 
-	// Try plumbing-level merge (no checkout required).
-	treeOID, _, mergeTreeErr := core.GitWithStderr(repoRoot, "merge-tree", "--write-tree", srcBranch, ag.Branch)
-	if mergeTreeErr == nil {
-		srcHead, err := core.Git(repoRoot, "rev-parse", srcBranch)
-		if err != nil {
-			return fmt.Errorf("failed to resolve %s: %w", srcBranch, err)
+	// Try squash merge + commit
+	_, mergeErr := core.Git(repoRoot, "merge", "--squash", ag.Branch)
+	if mergeErr == nil {
+		if _, commitErr := core.Git(repoRoot, "commit", "-m", mergeMsg); commitErr == nil {
+			sha, err := core.Git(repoRoot, "rev-parse", "HEAD")
+			if err != nil {
+				return fmt.Errorf("merge succeeded but failed to record commit sha: %w", err)
+			}
+			core.WriteFileContent(td+"/merge_commit", sha)
+			return nil
 		}
-		commitOID, err := core.Git(repoRoot, "commit-tree", treeOID, "-p", srcHead, "-m", mergeMsg)
-		if err != nil {
-			return fmt.Errorf("failed to create merge commit: %w", err)
-		}
-		// CAS update — fails if srcBranch moved since we read srcHead.
-		if _, err := core.Git(repoRoot, "update-ref", "refs/heads/"+srcBranch, commitOID, srcHead); err != nil {
-			return fmt.Errorf("branch %s moved during merge, try again: %w", srcBranch, err)
-		}
-		if err := core.WriteFileContent(td+"/merge_commit", commitOID); err != nil {
-			return fmt.Errorf("failed to record merge commit: %w", err)
-		}
-		return nil
 	}
 
-	// Conflicts detected — fall back to checkout + merge --squash for manual resolution.
-	mainStatus, _ := core.Git(repoRoot, "status", "--porcelain")
-	if mainStatus != "" {
-		return fmt.Errorf("main repo has uncommitted changes; commit or stash before merging")
-	}
-	if _, err := core.Git(repoRoot, "checkout", srcBranch); err != nil {
-		return fmt.Errorf("failed to checkout %s: %w", srcBranch, err)
-	}
-	core.Git(repoRoot, "merge", "--squash", ag.Branch)
-
+	// Return conflict info without resetting — caller shows inline menu.
 	files := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
 	return &MergeConflictErr{
 		RepoRoot:  repoRoot,

@@ -12,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/agent"
-	"github.com/xemotrix/augmux/internal/components"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
@@ -41,14 +40,14 @@ type TUIModel struct {
 	cursor        int // index into the agents slice
 	agents        []*core.AgentState
 	quitting      bool
-	busy          bool // true while an action cmd is in flight
 	mode          tuiMode
 	spinner       spinner.Model
 	textInput     textinput.Model                      // for spawn
 	toaster       toaster                              // toast notifications
 	actionHandler func(TUIResult, string) ActionResult // returns action result
 	menuTitle     string                               // inline menu title
-	menuNav       components.MenuNav                   // shared menu navigation state
+	menuOptions   []string                             // inline menu options
+	menuCursor    int                                  // inline menu cursor
 	menuCallback  func(int) ActionResult               // inline menu callback
 
 	conflictTree *conflictTreeState // non-nil when viewing conflict tree
@@ -57,27 +56,14 @@ type TUIModel struct {
 type tickMsg time.Time
 type conflictTreeMsg struct{ state *conflictTreeState }
 
-type refreshedAgentsMsg struct {
-	agents    []*core.AgentState
-	srcBranch string
-}
-
 func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-func refreshCmd(repoRoot string) tea.Cmd {
-	return func() tea.Msg {
-		indices := core.ListAgents(repoRoot)
-		src := core.SourceBranch(repoRoot)
-		agents := core.ReadAndEnrichAgents(repoRoot, indices, src)
-		return refreshedAgentsMsg{agents: agents, srcBranch: src}
-	}
-}
-
-func (m *TUIModel) applyRefresh(agents []*core.AgentState, srcBranch string) {
-	m.agents = agents
-	m.srcBranch = srcBranch
+func (m *TUIModel) refreshAgents() {
+	indices := core.ListAgents(m.repoRoot)
+	m.srcBranch = core.SourceBranch(m.repoRoot)
+	m.agents = core.ReadAndEnrichAgents(m.repoRoot, indices, m.srcBranch)
 	if m.cursor >= len(m.agents) {
 		m.cursor = len(m.agents) - 1
 	}
@@ -95,7 +81,7 @@ func (m TUIModel) cols() int {
 }
 
 func (m TUIModel) Init() tea.Cmd {
-	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick, refreshCmd(m.repoRoot))
+	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick)
 }
 
 func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -103,14 +89,11 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		return m, refreshCmd(m.repoRoot)
+		m.refreshAgents()
 
 	case tickMsg:
-		return m, tea.Batch(tickEvery(500*time.Millisecond), refreshCmd(m.repoRoot))
-
-	case refreshedAgentsMsg:
-		m.applyRefresh(msg.agents, msg.srcBranch)
-		return m, nil
+		m.refreshAgents()
+		return m, tickEvery(500 * time.Millisecond)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -132,10 +115,10 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionResultMsg:
-		m.busy = false
 		switch v := msg.result.(type) {
 		case ActionDone:
-			cmds := []tea.Cmd{refreshCmd(m.repoRoot)}
+			m.refreshAgents()
+			var cmds []tea.Cmd
 			for _, line := range v.Lines {
 				cmds = append(cmds, AddToast(line, v.Level))
 			}
@@ -143,9 +126,11 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case MenuRequest:
 			m.mode = modeMenu
 			m.menuTitle = v.Title
-			m.menuNav = components.MenuNav{Options: v.Options, Cursor: 0}
+			m.menuOptions = v.Options
+			m.menuCursor = 0
 			m.menuCallback = v.Callback
-			cmds := []tea.Cmd{refreshCmd(m.repoRoot)}
+			m.refreshAgents()
+			var cmds []tea.Cmd
 			for _, line := range v.Lines {
 				cmds = append(cmds, AddToast(line, ToastInfo))
 			}
@@ -189,9 +174,6 @@ func validateAgentName(s string) error {
 func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
-		if m.busy {
-			return m, nil
-		}
 		name := strings.TrimSpace(m.textInput.Value())
 		m.mode = modeNormal
 		if name == "" {
@@ -200,7 +182,6 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err := validateAgentName(name); err != nil {
 			return m, AddToast("Invalid name: "+err.Error(), ToastWarning)
 		}
-		m.busy = true
 		agentIdx := -1
 		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
 		handler := m.actionHandler
@@ -217,15 +198,23 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m TUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch m.menuNav.HandleKey(msg) {
-	case components.NavSelect:
+	switch msg.String() {
+	case "up", "k":
+		if m.menuCursor > 0 {
+			m.menuCursor--
+		}
+	case "down", "j":
+		if m.menuCursor < len(m.menuOptions)-1 {
+			m.menuCursor++
+		}
+	case "enter":
 		m.mode = modeNormal
 		cb := m.menuCallback
-		cursor := m.menuNav.Cursor
+		cursor := m.menuCursor
 		return m, func() tea.Msg {
 			return actionResultMsg{result: cb(cursor)}
 		}
-	case components.NavCancel:
+	case "esc", "ctrl+c":
 		m.mode = modeNormal
 		cb := m.menuCallback
 		return m, func() tea.Msg {
@@ -236,19 +225,26 @@ func (m TUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m TUIModel) updateAgentSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch m.menuNav.HandleKey(msg) {
-	case components.NavSelect:
+	switch msg.String() {
+	case "up", "k":
+		if m.menuCursor > 0 {
+			m.menuCursor--
+		}
+	case "down", "j":
+		if m.menuCursor < len(m.menuOptions)-1 {
+			m.menuCursor++
+		}
+	case "enter":
 		defs := agent.KnownAgentDefs()
 		m.mode = modeNormal
-		cursor := m.menuNav.Cursor
-		if cursor >= 0 && cursor < len(defs) {
-			if err := agent.SaveAgentChoice(defs[cursor].ID); err != nil {
+		if m.menuCursor >= 0 && m.menuCursor < len(defs) {
+			if err := agent.SaveAgentChoice(defs[m.menuCursor].ID); err != nil {
 				return m, AddToast(fmt.Sprintf("Failed to save config: %v", err), ToastError)
 			}
-			return m, AddToast(fmt.Sprintf("Configured to use %s", defs[cursor].DisplayName), ToastSuccess)
+			return m, AddToast(fmt.Sprintf("Configured to use %s", defs[m.menuCursor].DisplayName), ToastSuccess)
 		}
 		return m, nil
-	case components.NavCancel:
+	case "esc", "ctrl+c", "q":
 		m.quitting = true
 		return m, tea.Quit
 	}
@@ -332,19 +328,19 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
-		if !m.busy && isWip && hasCommits {
+		if isWip && hasCommits {
 			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
-		if !m.busy && isMerged {
+		if isMerged {
 			return m.runInlineAction(ActionAccept, agentIdx)
 		}
 	case "r":
-		if !m.busy && (isMerged || isResolving) {
+		if isMerged || isResolving {
 			return m.runInlineAction(ActionReject, agentIdx)
 		}
 	case "c":
-		if !m.busy && (isWip || isResolving) {
+		if isWip || isResolving {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
 	case "=":
@@ -356,11 +352,11 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "b":
-		if !m.busy && isWip && sel.HasConflicts && isIdle {
+		if isWip && sel.HasConflicts && isIdle {
 			return m.runInlineAction(ActionRebase, agentIdx)
 		}
 	case "enter":
-		if !m.busy && sel != nil {
+		if sel != nil {
 			return m.runInlineAction(ActionFocus, agentIdx)
 		}
 	}
@@ -392,7 +388,6 @@ func (m TUIModel) updateConflictTree(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
-	m.busy = true
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
 	handler := m.actionHandler
 	return m, func() tea.Msg {
@@ -401,7 +396,7 @@ func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, te
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
-func renderActionBar(a *core.AgentState, busy bool) string {
+func renderActionBar(a *core.AgentState) string {
 	type action struct {
 		name    string
 		enabled bool
@@ -416,14 +411,14 @@ func renderActionBar(a *core.AgentState, busy bool) string {
 	hasAgent := a != nil
 
 	actions := []action{
-		{"enter:focus", !busy && hasAgent},
-		{"spawn", !busy},
-		{"merge", !busy && isWip && hasCommits},
-		{"re|base", !busy && isWip && hasConflicts && isIdle},
+		{"enter:focus", hasAgent},
+		{"spawn", true},
+		{"merge", isWip && hasCommits},
+		{"re|base", isWip && hasConflicts && isIdle},
 		{"=:details", hasCommits},
-		{"accept", !busy && isMerged},
-		{"reject", !busy && (isMerged || isResolving)},
-		{"cancel", !busy && (isWip || isResolving)},
+		{"accept", isMerged},
+		{"reject", isMerged || isResolving},
+		{"cancel", isWip || isResolving},
 	}
 
 	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorAccent)
@@ -516,7 +511,7 @@ func (m TUIModel) View() string {
 	sections := []string{title, header, ""}
 
 	if m.mode == modeAgentSetup {
-		menu := renderMenu(m.menuTitle, m.menuNav.Options, m.menuNav.Cursor,
+		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
 			"j/k navigate · enter select · esc quit")
 		sections = append(sections, menu)
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
@@ -557,7 +552,7 @@ func (m TUIModel) View() string {
 	}
 
 	if m.mode == modeMenu {
-		menu := renderMenu(m.menuTitle, m.menuNav.Options, m.menuNav.Cursor,
+		menu := renderMenu(m.menuTitle, m.menuOptions, m.menuCursor,
 			"j/k navigate · enter select · esc cancel")
 		sections = append(sections, menu)
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
@@ -567,7 +562,7 @@ func (m TUIModel) View() string {
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	bar := renderActionBar(selected, m.busy)
+	bar := renderActionBar(selected)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	contentHeight := lipgloss.Height(content)
@@ -604,8 +599,10 @@ func RunInteractiveTUI(repoRoot string) {
 		}
 		m.mode = modeAgentSetup
 		m.menuTitle = "No agent CLI configured — select one:"
-		m.menuNav = components.MenuNav{Options: options, Cursor: 0}
+		m.menuOptions = options
+		m.menuCursor = 0
 	}
+	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
