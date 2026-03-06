@@ -326,7 +326,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
 	case "=":
-		if sel != nil && sel.HasConflicts {
+		if sel != nil && sel.CommitsAhead > 0 {
 			repoRoot := m.repoRoot
 			ag := sel
 			return m, func() tea.Msg {
@@ -397,7 +397,7 @@ func renderActionBar(a *core.AgentState) string {
 		{"spawn", true},
 		{"merge", isWip && hasCommits},
 		{"re|base", isWip && hasConflicts && isIdle},
-		{"=:details", hasConflicts},
+		{"=:details", hasCommits},
 		{"accept", isMerged},
 		{"reject", isMerged || isResolving},
 		{"cancel", isWip || isResolving},

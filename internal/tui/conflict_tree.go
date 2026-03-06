@@ -194,15 +194,23 @@ func renderConflictTree(state *conflictTreeState) string {
 		rootTree.Child(style.Render(fname))
 	}
 
-	legend := lipgloss.JoinVertical(lipgloss.Left,
-		"",
-		styles.LabelStyle.Render("Legend:"),
-		lipgloss.NewStyle().Foreground(styles.ColorRed).Render("  ● conflict"),
-		lipgloss.NewStyle().Foreground(styles.ColorYellow).Render("  ● changed in both (no conflict)"),
-		lipgloss.NewStyle().Foreground(styles.ColorGreen).Render("  ● changed only in worktree"),
-		"",
-		styles.PickerHintStyle.Render("j/k scroll · ctrl-u/ctrl-d half-page · esc close"),
-	)
+	presentCats := make(map[fileCategory]bool)
+	for _, f := range state.files {
+		presentCats[f.category] = true
+	}
+
+	legendEntries := []string{"", styles.LabelStyle.Render("Legend:")}
+	if presentCats[catConflict] {
+		legendEntries = append(legendEntries, lipgloss.NewStyle().Foreground(styles.ColorRed).Render("  ● conflict"))
+	}
+	if presentCats[catBothClean] {
+		legendEntries = append(legendEntries, lipgloss.NewStyle().Foreground(styles.ColorYellow).Render("  ● changed in both (no conflict)"))
+	}
+	if presentCats[catWorktreeOnly] {
+		legendEntries = append(legendEntries, lipgloss.NewStyle().Foreground(styles.ColorGreen).Render("  ● changed only in worktree"))
+	}
+	legendEntries = append(legendEntries, "", styles.PickerHintStyle.Render("j/k scroll · ctrl-u/ctrl-d half-page · esc close"))
+	legend := lipgloss.JoinVertical(lipgloss.Left, legendEntries...)
 
 	return rootTree.String() + "\n" + legend
 }
