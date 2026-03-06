@@ -76,7 +76,7 @@ func (ah *ActionHandler) handleMerge(idx int, agentLabel string) ActionResult {
 	}
 }
 
-func (ah *ActionHandler) handleSpawn(idx int, spawnName string) ActionResult {
+func (ah *ActionHandler) handleSpawn(spawnName string) ActionResult {
 	if err := ops.SpawnByName(ah.repoRoot, spawnName); err != nil {
 		return ActionDone{
 			Lines: []string{fmt.Sprintf("Spawn failed: %s", err)},
@@ -241,7 +241,7 @@ func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult
 	case ActionMerge:
 		return ah.handleMerge(idx, agentLabel)
 	case ActionSpawn:
-		return ah.handleSpawn(idx, spawnName)
+		return ah.handleSpawn(spawnName)
 	case ActionAccept:
 		return ah.handleAccept(idx, agentLabel)
 	case ActionReject:

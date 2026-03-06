@@ -1,3 +1,4 @@
+// Package tui handles the terminal user interface of augmux
 package tui
 
 import (
@@ -11,7 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/xemotrix/augmux/internal/agent"
+	"github.com/xemotrix/augmux/internal/agentcli"
 	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
@@ -234,10 +235,10 @@ func (m TUIModel) updateAgentSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		m.menuCursor = min(len(m.menuOptions)-1, m.menuCursor+1)
 	case "enter":
-		defs := agent.KnownAgentDefs()
+		defs := agentcli.KnownAgentCliDefs()
 		m.mode = modeNormal
 		if m.menuCursor >= 0 && m.menuCursor < len(defs) {
-			if err := agent.SaveAgentChoice(defs[m.menuCursor].ID); err != nil {
+			if err := agentcli.SaveAgentCliChoice(defs[m.menuCursor].ID); err != nil {
 				return m, AddToast(fmt.Sprintf("Failed to save config: %v", err), ToastError)
 			}
 			return m, AddToast(fmt.Sprintf("Configured to use %s", defs[m.menuCursor].DisplayName), ToastSuccess)
@@ -533,8 +534,8 @@ func RunInteractiveTUI(repoRoot string) {
 		toaster:       newToaster(),
 		actionHandler: actionHandler,
 	}
-	if !agent.IsConfigured() {
-		defs := agent.KnownAgentDefs()
+	if !agentcli.IsConfigured() {
+		defs := agentcli.KnownAgentCliDefs()
 		var options []string
 		for _, d := range defs {
 			options = append(options, d.DisplayName)

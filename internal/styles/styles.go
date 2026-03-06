@@ -1,3 +1,4 @@
+// Package styles holds reusable lipgloss styles and pallete colors
 package styles
 
 import (

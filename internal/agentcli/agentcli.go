@@ -1,4 +1,6 @@
-package agent
+// Package agentcli handles the external cli used with augmux
+// (Cursor's 'agent', Augment's 'auggie', etc.)
+package agentcli
 
 import (
 	"encoding/json"
@@ -7,9 +9,9 @@ import (
 	"path/filepath"
 )
 
-// AgentDef describes how to invoke a particular agent CLI tool.
+// AgentCliDef describes how to invoke a particular agent CLI tool.
 // To add a new agent, add an entry to the knownAgents slice below.
-type AgentDef struct {
+type AgentCliDef struct {
 	ID          string // unique key, e.g. "auggie"
 	DisplayName string // shown in picker, e.g. "Auggie (Augment Code)"
 	Command     string // binary name, e.g. "auggie"
@@ -17,7 +19,7 @@ type AgentDef struct {
 
 // knownAgents is the registry of supported agent CLIs.
 // To support a new agent, add an entry here — no other file needs to change.
-var knownAgents = []AgentDef{
+var knownAgents = []AgentCliDef{
 	{
 		ID:          "auggie",
 		DisplayName: "Auggie (Augment Code)",
@@ -30,8 +32,8 @@ var knownAgents = []AgentDef{
 	},
 }
 
-// agentConfig is the persisted user config.
-type agentConfig struct {
+// agentCliConfig is the persisted user config.
+type agentCliConfig struct {
 	Agent string `json:"agent"`
 }
 
@@ -45,7 +47,7 @@ func configPath() (string, error) {
 }
 
 // loadConfig reads the config file. Returns nil if it doesn't exist.
-func loadConfig() *agentConfig {
+func loadConfig() *agentCliConfig {
 	p, err := configPath()
 	if err != nil {
 		return nil
@@ -54,7 +56,7 @@ func loadConfig() *agentConfig {
 	if err != nil {
 		return nil
 	}
-	var cfg agentConfig
+	var cfg agentCliConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil
 	}
@@ -62,7 +64,7 @@ func loadConfig() *agentConfig {
 }
 
 // saveConfig writes the config file.
-func saveConfig(cfg *agentConfig) error {
+func saveConfig(cfg *agentCliConfig) error {
 	p, err := configPath()
 	if err != nil {
 		return err
@@ -77,8 +79,8 @@ func saveConfig(cfg *agentConfig) error {
 	return os.WriteFile(p, data, 0o644)
 }
 
-// findAgent looks up an AgentDef by ID.
-func findAgent(id string) *AgentDef {
+// findAgentCli looks up an AgentCliDef by ID.
+func findAgentCli(id string) *AgentCliDef {
 	for i := range knownAgents {
 		if knownAgents[i].ID == id {
 			return &knownAgents[i]
@@ -90,36 +92,35 @@ func findAgent(id string) *AgentDef {
 // IsConfigured returns true if a valid agent config exists.
 func IsConfigured() bool {
 	cfg := loadConfig()
-	return cfg != nil && findAgent(cfg.Agent) != nil
+	return cfg != nil && findAgentCli(cfg.Agent) != nil
 }
 
-// KnownAgentDefs returns the list of supported agent CLIs.
-func KnownAgentDefs() []AgentDef {
+// KnownAgentCliDefs returns the list of supported agent CLIs.
+func KnownAgentCliDefs() []AgentCliDef {
 	return knownAgents
 }
 
-// SaveAgentChoice persists the given agent ID to the config file.
-func SaveAgentChoice(id string) error {
-	return saveConfig(&agentConfig{Agent: id})
+// SaveAgentCliChoice persists the given agent ID to the config file.
+func SaveAgentCliChoice(id string) error {
+	return saveConfig(&agentCliConfig{Agent: id})
 }
 
-// ConfiguredAgent returns the configured agent without prompting, or nil if not configured.
-func ConfiguredAgent() *AgentDef {
+// ConfiguredAgentCli returns the configured agent without prompting, or nil if not configured.
+func ConfiguredAgentCli() *AgentCliDef {
 	cfg := loadConfig()
 	if cfg != nil {
-		return findAgent(cfg.Agent)
+		return findAgentCli(cfg.Agent)
 	}
 	return nil
 }
 
-// ActiveAgent returns the configured agent, or an error if none is configured.
-func ActiveAgent() (*AgentDef, error) {
+// ActiveAgentCli returns the configured agent, or an error if none is configured.
+func ActiveAgentCli() (*AgentCliDef, error) {
 	cfg := loadConfig()
 	if cfg != nil {
-		if a := findAgent(cfg.Agent); a != nil {
+		if a := findAgentCli(cfg.Agent); a != nil {
 			return a, nil
 		}
 	}
 	return nil, fmt.Errorf("no agent CLI configured; select one from the TUI first")
 }
-

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/xemotrix/augmux/internal/agent"
+	"github.com/xemotrix/augmux/internal/agentcli"
 	"github.com/xemotrix/augmux/internal/core"
 )
 
@@ -29,7 +29,7 @@ func ensureSession(repoRoot string) error {
 	return nil
 }
 
-func spawn(repoRoot, name string, ag *agent.AgentDef) error {
+func spawn(repoRoot, name string, ag *agentcli.AgentCliDef) error {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -53,7 +53,7 @@ func spawn(repoRoot, name string, ag *agent.AgentDef) error {
 	}
 
 	rulesFile := filepath.Join(td, "rules.md")
-	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
+	rulesContent := agentcli.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
 	if ag.ID == "cursor" {
@@ -64,17 +64,17 @@ func spawn(repoRoot, name string, ag *agent.AgentDef) error {
 
 		cursorRulesDir := filepath.Join(wtPath, ".cursor", "rules")
 		os.MkdirAll(cursorRulesDir, 0o755)
-		mdcContent := agent.BuildCursorMDC(rulesContent)
+		mdcContent := agentcli.BuildCursorMDC(rulesContent)
 		core.WriteFileContent(filepath.Join(cursorRulesDir, "augmux.mdc"), mdcContent)
 
 		cursorCmdsDir := filepath.Join(wtPath, ".cursor", "commands")
 		os.MkdirAll(cursorCmdsDir, 0o755)
-		rebaseCmd := agent.BuildRebaseCommand(srcBranch)
+		rebaseCmd := agentcli.BuildRebaseCommand(srcBranch)
 		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-rebase.md"), rebaseCmd)
-		rebaseYoloCmd := agent.BuildRebaseYoloCommand(srcBranch)
+		rebaseYoloCmd := agentcli.BuildRebaseYoloCommand(srcBranch)
 		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-yolobase.md"), rebaseYoloCmd)
 
-		squashCmd := agent.BuildSquashCommand(srcBranch)
+		squashCmd := agentcli.BuildSquashCommand(srcBranch)
 		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-squash.md"), squashCmd)
 
 		gitignorePath := filepath.Join(wtPath, ".gitignore")
@@ -122,7 +122,7 @@ func SpawnByName(repoRoot string, name string) error {
 	if err := ensureSession(repoRoot); err != nil {
 		return err
 	}
-	ag, err := agent.ActiveAgent()
+	ag, err := agentcli.ActiveAgentCli()
 	if err != nil {
 		return err
 	}

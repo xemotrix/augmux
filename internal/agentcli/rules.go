@@ -1,4 +1,4 @@
-package agent
+package agentcli
 
 import (
 	"fmt"
@@ -88,7 +88,7 @@ Do NOT use ` + "`git rebase --abort`" + ` unless you truly cannot resolve a conf
 
 // BuildRebaseYoloCommand renders the yolo rebase command template for the given source branch.
 func BuildRebaseYoloCommand(sourceBranch string) string {
-	return strings.Replace(RebaseYoloCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+	return strings.ReplaceAll(RebaseYoloCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch)
 }
 
 // RebaseCommandTemplate is the Cursor slash command prompt for /augmux-rebase.
@@ -163,7 +163,7 @@ Do NOT use ` + "`git rebase --abort`" + ` unless the user explicitly asks you to
 
 // BuildRebaseCommand renders the interactive rebase command template for the given source branch.
 func BuildRebaseCommand(sourceBranch string) string {
-	return strings.Replace(RebaseCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+	return strings.ReplaceAll(RebaseCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch)
 }
 
 // SquashCommandTemplate is the Cursor slash command prompt for /augmux-squash.
@@ -194,12 +194,16 @@ Do NOT push to any remote.
 
 // BuildSquashCommand renders the squash command template for the given source branch.
 func BuildSquashCommand(sourceBranch string) string {
-	return strings.Replace(SquashCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+	return strings.ReplaceAll(
+		SquashCommandTemplate,
+		"{{SOURCE_BRANCH}}",
+		sourceBranch,
+	)
 }
 
 // SpawnCmdWithRules returns the shell command to start the agent with a rules file.
 // For agents that don't support rules, it falls back to the plain command.
-func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
+func (a *AgentCliDef) SpawnCmdWithRules(rulesFile string) string {
 	if a.ID == "auggie" && rulesFile != "" {
 		return fmt.Sprintf("%s --rules '%s'", a.Command, rulesFile)
 	}
@@ -208,5 +212,3 @@ func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
 	}
 	return a.Command
 }
-
-
