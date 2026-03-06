@@ -45,10 +45,10 @@ func computeConflictTree(repoRoot string, ag *core.AgentState) *conflictTreeStat
 	agentFiles := splitNonEmpty(core.GitMust(repoRoot, "diff", "--name-only", mergeBase+".."+ag.Branch))
 	sourceFiles := splitNonEmpty(core.GitMust(repoRoot, "diff", "--name-only", mergeBase+".."+srcBranch))
 
-	// Run merge-tree discarding stdout (which can be enormous) and parse
-	// CONFLICT file names from stderr instead.
-	mtStderr, _ := core.GitStderr(repoRoot, "merge-tree", "--write-tree", srcBranch, ag.Branch)
-	conflictFiles := parseConflictFilesFromStderr(mtStderr)
+	// --name-only outputs conflicted filenames (one per line) in the
+	// "Conflicted file info" section of stdout, right after the tree OID.
+	mtOut := core.GitMust(repoRoot, "merge-tree", "--write-tree", "--name-only", srcBranch, ag.Branch)
+	conflictFiles := parseMergeTreeConflictFiles(mtOut)
 
 	sourceSet := toSet(sourceFiles)
 	conflictSet := toSet(conflictFiles)
@@ -86,29 +86,34 @@ func computeConflictTree(repoRoot string, ag *core.AgentState) *conflictTreeStat
 	return state
 }
 
-// parseConflictFilesFromStderr extracts conflict filenames from the stderr
-// output of "git merge-tree --write-tree". Stderr contains lines like:
+// parseMergeTreeConflictFiles extracts conflict filenames from the stdout of
+// "git merge-tree --write-tree --name-only". The output format is:
 //
-//	CONFLICT (content): Merge conflict in path/to/file.go
-//	Auto-merging some/other/file.go
+//	<tree OID>
+//	<conflicted file 1>
+//	<conflicted file 2>
+//	...
+//	<blank line>
+//	<informational messages (CONFLICT ..., Auto-merging ...)>
 //
-// We extract the file path from each CONFLICT line.
-func parseConflictFilesFromStderr(stderr string) []string {
-	if stderr == "" {
+// The first line is always the tree OID. Subsequent non-blank lines before the
+// informational messages section are the conflicted filenames.
+func parseMergeTreeConflictFiles(stdout string) []string {
+	if stdout == "" {
 		return nil
 	}
+	lines := strings.Split(stdout, "\n")
+	if len(lines) < 2 {
+		return nil
+	}
+
 	var files []string
-	for _, line := range strings.Split(stderr, "\n") {
+	for _, line := range lines[1:] {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "CONFLICT") {
-			continue
+		if line == "" {
+			break
 		}
-		if idx := strings.LastIndex(line, " in "); idx >= 0 {
-			file := strings.TrimSpace(line[idx+4:])
-			if file != "" {
-				files = append(files, file)
-			}
-		}
+		files = append(files, line)
 	}
 	return files
 }
