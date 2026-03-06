@@ -9,7 +9,11 @@
 # Add the following to your ~/.tmux.conf (adjust the path to wherever this
 # repo lives on your machine):
 #
+#   # Normal mode — open an empty compose editor
 #   bind-key -n C-o run-shell "/path/to/augmux/scripts/nvim-compose"
+#
+#   # Copy-mode (vi) — grab the selection and open compose with it pre-filled
+#   bind-key -T copy-mode-vi C-o send-keys -X copy-pipe-and-cancel "/path/to/augmux/scripts/nvim-compose --from-stdin"
 #
 # Then reload tmux config:
 #
@@ -17,6 +21,9 @@
 #
 # Ctrl-O (no prefix needed) will open a floating editor popup. Write your
 # text, save and quit, and it gets pasted into the pane you came from.
+#
+# If you press Ctrl-O while in tmux copy-mode (vi) with text selected, the
+# selection is piped into the editor so you can edit it before pasting.
 #
 # Uses $EDITOR if set, falls back to nvim.
 #
@@ -30,6 +37,10 @@ TMPFILE=$(mktemp /tmp/nvim-compose-XXXXXX.md)
 trap 'rm -f "$TMPFILE"' EXIT
 
 PANE_ID=$(tmux display-message -p '#{pane_id}')
+
+if [ "$1" = "--from-stdin" ]; then
+  cat > "$TMPFILE"
+fi
 
 COMPOSE_EDITOR="${EDITOR:-nvim}"
 
