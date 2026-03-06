@@ -136,12 +136,6 @@ func (a *AgentDef) RebasePaneCmd(prompt, rulesFile string) string {
 	return a.oneOffPaneCmd(prompt, rulesFile)
 }
 
-// SquashPaneCmd returns the shell command to run a non-interactive agent
-// instance that performs the squash operation.
-func (a *AgentDef) SquashPaneCmd(prompt, rulesFile string) string {
-	return a.oneOffPaneCmd(prompt, rulesFile)
-}
-
 // RebaseExecCmd returns an *exec.Cmd for running a headless agent instance
 // that performs the rebase operation. The caller is responsible for starting it.
 func (a *AgentDef) RebaseExecCmd(prompt, rulesFile, worktree string) *exec.Cmd {
