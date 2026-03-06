@@ -65,7 +65,12 @@ Follow these steps exactly:
 
 4. **If there are conflicts**, for each conflicted file:
    - Open the file and look for conflict markers (` + "`<<<<<<<`" + `, ` + "`=======`" + `, ` + "`>>>>>>>`" + `).
-   - Resolve by integrating **both** sides: keep the new features from ` + "`{{SOURCE_BRANCH}}`" + ` AND your own changes. Do not discard either side.
+   - **Your goal is to preserve the functionality from both branches.** This does NOT mean blindly concatenating or keeping all changes from both sides. Think about each conflict individually:
+     - Read and understand what each side intended to accomplish.
+     - If both sides added different functionality to the same area, integrate both functionalities in a way that makes sense structurally and logically.
+     - If both sides modified the same code differently, determine the correct version that satisfies both intents — this may mean rewriting the section to combine both purposes, picking one side when the other is redundant, or adapting one side's approach to coexist with the other.
+     - If one side deleted or refactored code that the other side modified, decide whether the deletion/refactor still makes sense given the other side's changes, and adjust accordingly.
+   - The key principle: **no functionality should be silently lost**, but the final code must be coherent, correct, and free of duplication.
    - Stage the resolved file:
 ` + "     ```" + `
      git add <file>
@@ -76,7 +81,7 @@ Follow these steps exactly:
 ` + "     ```" + `
    - If more conflicts appear, repeat this step.
 
-5. After the rebase completes, verify the build still works and your changes are intact.
+5. After the rebase completes, verify the build still works and that functionality from both branches is intact.
 
 Do NOT use ` + "`git rebase --abort`" + ` unless you truly cannot resolve a conflict. Do NOT push to any remote.
 `
