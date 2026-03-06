@@ -32,7 +32,7 @@ in parallel using tmux windows and git worktrees.
 func BuildRules(task, branch, worktree, sourceBranch string, commitRule bool) string {
 	commitInstruction := "- When you finish your task, **commit your changes** with a clear commit message unless the user tells you otherwise."
 	if !commitRule {
-		commitInstruction = "- Do **NOT** commit any changes — the user will control commits manually."
+		commitInstruction = "- Do **NOT** commit changes on your own. Only commit if the user explicitly asks you to."
 	}
 	r := strings.NewReplacer(
 		"{{TASK}}", task,
