@@ -10,15 +10,18 @@ import (
 )
 
 type selectMenuModel struct {
-	title   string
-	options []string
-	cursor  int
-	chosen  int // -1 = cancelled
-	quit    bool
+	title  string
+	nav    MenuNav
+	chosen int // -1 = cancelled
+	quit   bool
 }
 
 func newSelectMenuModel(title string, options []string) selectMenuModel {
-	return selectMenuModel{title: title, options: options, cursor: 0, chosen: -1}
+	return selectMenuModel{
+		title:  title,
+		nav:    MenuNav{Options: options, Cursor: 0},
+		chosen: -1,
+	}
 }
 
 func (m selectMenuModel) Init() tea.Cmd { return nil }
@@ -26,24 +29,12 @@ func (m selectMenuModel) Init() tea.Cmd { return nil }
 func (m selectMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.options)-1 {
-				m.cursor++
-			}
-		case "g":
-			m.cursor = 0
-		case "G":
-			m.cursor = len(m.options) - 1
-		case "enter":
-			m.chosen = m.cursor
+		switch m.nav.HandleKey(msg) {
+		case NavSelect:
+			m.chosen = m.nav.Cursor
 			m.quit = true
 			return m, tea.Quit
-		case "q", "esc", "ctrl+c":
+		case NavCancel:
 			m.quit = true
 			return m, tea.Quit
 		}
@@ -59,10 +50,10 @@ func (m selectMenuModel) View() string {
 	titleLine := styles.TitleStyle.Render(m.title)
 
 	var items []string
-	for i, opt := range m.options {
+	for i, opt := range m.nav.Options {
 		cur := lipgloss.NewStyle().Width(2).Render("")
 		style := styles.PickerNormalStyle
-		if i == m.cursor {
+		if i == m.nav.Cursor {
 			cur = styles.PickerCursorStyle.Render("▸ ")
 			style = styles.PickerSelectedStyle
 		}

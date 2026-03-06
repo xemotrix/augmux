@@ -78,20 +78,30 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 							"Continue — leave conflicts, resolve manually",
 							"Abort — discard merge and reset",
 						},
-						Callback: func(choice int) ActionResult {
-							if choice == 1 || choice == -1 {
-								ops.ResolveConflict(conflictErr, -1)
+					Callback: func(choice int) ActionResult {
+						if choice == 1 || choice == -1 {
+							if err := ops.ResolveConflict(conflictErr, -1); err != nil {
 								return ActionDone{
-									Lines: []string{"Merge aborted"},
-									Level: ToastWarning,
+									Lines: []string{fmt.Sprintf("Abort failed: %s", err)},
+									Level: ToastError,
 								}
 							}
-							ops.ResolveConflict(conflictErr, 0)
 							return ActionDone{
-								Lines: []string{"Conflicts left for manual resolution"},
+								Lines: []string{"Merge aborted"},
 								Level: ToastWarning,
 							}
-						},
+						}
+						if err := ops.ResolveConflict(conflictErr, 0); err != nil {
+							return ActionDone{
+								Lines: []string{fmt.Sprintf("Failed to set resolving state: %s", err)},
+								Level: ToastError,
+							}
+						}
+						return ActionDone{
+							Lines: []string{"Conflicts left for manual resolution"},
+							Level: ToastWarning,
+						}
+					},
 					}
 				}
 				if err != nil {

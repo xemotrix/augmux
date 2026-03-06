@@ -22,14 +22,22 @@ func ensureSession(repoRoot string) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine current branch: %w", err)
 	}
-	os.MkdirAll(sd, 0o755)
-	os.MkdirAll(core.WorktreeBase(repoRoot), 0o755)
-	core.WriteFileContent(filepath.Join(sd, "source_branch"), branch)
-	core.WriteFileContent(filepath.Join(sd, "repo_root"), repoRoot)
+	if err := os.MkdirAll(sd, 0o755); err != nil {
+		return fmt.Errorf("failed to create state dir: %w", err)
+	}
+	if err := os.MkdirAll(core.WorktreeBase(repoRoot), 0o755); err != nil {
+		return fmt.Errorf("failed to create worktrees dir: %w", err)
+	}
+	if err := core.WriteFileContent(filepath.Join(sd, "source_branch"), branch); err != nil {
+		return fmt.Errorf("failed to write source_branch: %w", err)
+	}
+	if err := core.WriteFileContent(filepath.Join(sd, "repo_root"), repoRoot); err != nil {
+		return fmt.Errorf("failed to write repo_root: %w", err)
+	}
 	return nil
 }
 
-func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
+func spawnOne(repoRoot, name string, ag *agent.AgentDef) (retErr error) {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -39,7 +47,25 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
 	wtPath := filepath.Join(core.WorktreeBase(repoRoot), fmt.Sprintf("%s-%d", safe, idx))
 
 	td := filepath.Join(sd, fmt.Sprintf("task-%d", idx))
-	os.MkdirAll(td, 0o755)
+	if err := os.MkdirAll(td, 0o755); err != nil {
+		return fmt.Errorf("failed to create task dir: %w", err)
+	}
+
+	// Track what was created so we can roll back on error.
+	var branchCreated, worktreeCreated bool
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		if worktreeCreated {
+			core.Git(repoRoot, "worktree", "remove", "--force", wtPath)
+		}
+		if branchCreated {
+			core.Git(repoRoot, "branch", "-D", branchName)
+		}
+		os.RemoveAll(td)
+	}()
+
 	core.WriteFileContent(filepath.Join(td, "description"), name)
 	core.WriteFileContent(filepath.Join(td, "branch"), branchName)
 	core.WriteFileContent(filepath.Join(td, "worktree"), wtPath)
@@ -48,9 +74,12 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
 	if _, err := core.Git(repoRoot, "branch", branchName, srcBranch); err != nil {
 		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
 	}
+	branchCreated = true
+
 	if _, err := core.Git(repoRoot, "worktree", "add", wtPath, branchName); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
+	worktreeCreated = true
 
 	rulesFile := filepath.Join(td, "rules.md")
 	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
@@ -83,7 +112,9 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
 
 	winName := fmt.Sprintf("ax-%d-%s", idx, safe)
 	core.WriteFileContent(filepath.Join(td, "window"), winName)
-	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
+	if err := core.TmuxRun("new-window", "-n", winName, "-c", wtPath); err != nil {
+		return fmt.Errorf("failed to create tmux window: %w", err)
+	}
 	core.TmuxRun("set-option", "-w", "-t", winName, "@augmux_worktree", wtPath)
 	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
 		`run-shell 'tmux send-keys -t "#{pane_id}" "cd \"#{@augmux_worktree}\" && clear" Enter'`)
