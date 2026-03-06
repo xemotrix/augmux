@@ -260,8 +260,6 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		sel = m.agents[m.cursor]
 	}
 
-	selStatus := sel.Status()
-
 	agentIdx := -1
 	if sel != nil {
 		agentIdx = sel.Index
@@ -321,22 +319,14 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
-		if selStatus == core.AgentStatusWip && sel.CommitsAhead > 0 {
-			return m.runInlineAction(ActionMerge, agentIdx)
-		}
+		return m.runInlineAction(ActionMerge, agentIdx)
 	case "a":
-		if selStatus == core.AgentStatusMerged {
-			return m.runInlineAction(ActionAccept, agentIdx)
-		}
+		return m.runInlineAction(ActionAccept, agentIdx)
 	case "r":
-		if selStatus == core.AgentStatusMerged {
-			return m.runInlineAction(ActionReject, agentIdx)
-		}
+		return m.runInlineAction(ActionReject, agentIdx)
 	case "c":
-		if selStatus == core.AgentStatusWip {
-			return m.runInlineAction(ActionCancel, agentIdx)
-		}
-	case "=":
+		return m.runInlineAction(ActionCancel, agentIdx)
+	case "e":
 		if sel != nil && sel.CommitsAhead > 0 {
 			repoRoot := m.repoRoot
 			ag := sel
@@ -345,13 +335,9 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "b":
-		if selStatus == core.AgentStatusConflict {
-			return m.runInlineAction(ActionRebase, agentIdx)
-		}
-	case "enter":
-		if sel != nil {
-			return m.runInlineAction(ActionFocus, agentIdx)
-		}
+		return m.runInlineAction(ActionRebase, agentIdx)
+	case "enter", "o":
+		return m.runInlineAction(ActionFocus, agentIdx)
 	}
 	return m, nil
 }

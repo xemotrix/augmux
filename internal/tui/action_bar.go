@@ -19,14 +19,14 @@ func (ab *ActionBar) View(selectedAgent *core.Agent, width int) string {
 	hasCommits := selectedAgent != nil && selectedAgent.CommitsAhead > 0
 
 	actions := []action{
-		{"f#cus", "o", status == core.AgentStatusNone},
-		{"#pawn", "s", true},
-		{"#erge", "m", status == core.AgentStatusWip && hasCommits},
-		{"re#ase", "b", status == core.AgentStatusConflict},
+		{"f#cus", "o", validAction(ActionFocus, status)},
+		{"#pawn", "s", validAction(ActionSpawn, status)},
+		{"#erge", "m", validAction(ActionMerge, status) && hasCommits},
+		{"re#ase", "b", validAction(ActionRebase, status)},
 		{"d#tails", "e", hasCommits},
-		{"#ccept", "a", status == core.AgentStatusMerged},
-		{"#eject", "r", status == core.AgentStatusMerged},
-		{"#ancel", "c", status == core.AgentStatusWip},
+		{"#ccept", "a", validAction(ActionAccept, status)},
+		{"#eject", "r", validAction(ActionReject, status)},
+		{"#ancel", "c", validAction(ActionCancel, status)},
 	}
 
 	var actionBlocks []string

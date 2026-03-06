@@ -60,6 +60,27 @@ type actionResultMsg struct {
 	result ActionResult
 }
 
+func validAction(action TUIAction, status core.AgentStatus) bool {
+	switch action {
+	case ActionSpawn:
+		return true
+	case ActionFocus:
+		return status != core.AgentStatusNone
+	case ActionMerge:
+		return status == core.AgentStatusWip
+	case ActionAccept, ActionReject:
+		return status == core.AgentStatusMerged
+	case ActionCancel:
+		return status == core.AgentStatusWip ||
+			status == core.AgentStatusIdle ||
+			status == core.AgentStatusWorking
+	case ActionRebase:
+		return status == core.AgentStatusConflict
+	default:
+		return false
+	}
+}
+
 func (ah *ActionHandler) handleMerge(idx int, agentLabel string) ActionResult {
 	if idx == -1 {
 		return ActionDone{}
@@ -231,10 +252,18 @@ func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult
 	idx := result.AgentIdx
 
 	agentLabel := fmt.Sprintf("agent %d", idx)
+	var ag *core.Agent
 	if idx >= 0 {
-		if ag, err := core.ReadAgent(ah.repoRoot, idx); err == nil && ag.Description != "" {
+		agent, err := core.ReadAgent(ah.repoRoot, idx)
+		ag = agent
+
+		if err == nil && ag.Description != "" {
 			agentLabel = fmt.Sprintf("%q", ag.Description)
 		}
+	}
+
+	if !validAction(result.Action, ag.Status()) {
+		return ActionDone{}
 	}
 
 	switch result.Action {
