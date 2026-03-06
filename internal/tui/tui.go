@@ -555,7 +555,7 @@ func RunInteractiveTUI(repoRoot string) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
 			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
-			FPS:    time.Second / 10,
+			FPS:    time.Second / 16,
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
 	)
