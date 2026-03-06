@@ -78,8 +78,8 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	core.WriteFileContent(filepath.Join(td, "window"), winName)
 	core.TmuxRun("new-window", "-n", winName, "-c", wtPath)
 	core.TmuxRun("set-option", "-w", "-t", winName, "@augmux_worktree", wtPath)
-	core.TmuxRun("set-hook", "after-split-window",
-		`if-shell -F '#{@augmux_worktree}' 'send-keys "cd \"#{@augmux_worktree}\" && clear" Enter'`)
+	core.TmuxRun("set-hook", "-w", "-t", winName, "after-split-window",
+		`run-shell 'tmux send-keys -t "#{pane_id}" "cd \"#{@augmux_worktree}\" && clear" Enter'`)
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
 }
