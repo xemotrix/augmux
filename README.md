@@ -48,7 +48,7 @@ augmux help    # show help
 
 ## TUI
 
-The dashboard shows a grid of agent cards with task name, branch, activity (working/idle), commits ahead, uncommitted files, and a status badge (`wip` / `merged` / `conflicts`). Borders are color-coded: green = idle with commits, yellow = working, cyan = merged, red = conflicts, gray = idle with no commits.
+The dashboard shows a grid of agent cards with task name, branch, activity (working/idle), commits ahead, uncommitted files, and a status badge (`wip` / `merged` / `conflict`). Borders are color-coded: green = idle with commits, yellow = working, cyan = merged, red = conflicts, gray = idle with no commits.
 
 ### Keybindings
 
@@ -61,8 +61,8 @@ The dashboard shows a grid of agent cards with task name, branch, activity (work
 | `r` | **Reject** — undo the merge commit; agent stays alive for fixes |
 | `c` | **Cancel** — discard an agent and all its changes |
 | `b` | **Rebase** — send a rebase command to an agent with conflicts |
-| `=` | **Details** — show a file change tree for the selected agent |
-| `enter` | **Focus** — switch to the agent's tmux window |
+| `e` | **Details** — show a file change tree for the selected agent |
+| `enter` / `o` | **Focus** — switch to the agent's tmux window |
 | `q` / `ctrl+c` | Quit the TUI |
 
 Actions are context-sensitive — they only activate when applicable to the selected agent's state (e.g. merge is only available for `wip` agents that have commits).
@@ -73,7 +73,7 @@ augmux manages a session tied to your current git branch (the "source branch"). 
 
 **Merge flow** — squash-merge → review → accept/reject. Uncommitted changes in the worktree are auto-committed before merging. Accept tears down the agent; reject undoes the merge commit so the agent can keep working.
 
-**Conflicts** are detected proactively via `git merge-tree`. When conflicts exist, merge is disabled and the card turns red. Press `b` to send a rebase command to the agent, or `=` to inspect which files conflict.
+**Conflicts** are detected proactively via `git merge-tree`. When conflicts exist, merge is disabled and the card turns red. Press `b` to send a rebase command to the agent, or `e` to inspect which files conflict.
 
 ## Typical Workflow
 

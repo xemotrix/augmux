@@ -102,7 +102,7 @@ After merging, the agent enters a "merged" state. You can review the diff and de
 
 #### Reject
 
-**TUI key:** `x`
+**TUI key:** `r`
 
 - Runs `git reset --hard HEAD~1` to remove the squash-merge commit from the source branch.
 - The agent's branch and worktree remain intact — the agent can continue working.
@@ -120,7 +120,7 @@ Discards an agent entirely without merging:
 
 ### 6. Rebase
 
-**TUI key:** `r` (shown when conflicts are detected and the agent is idle)
+**TUI key:** `b` (shown when conflicts are detected)
 
 When the source branch moves forward (e.g. you accepted another agent's merge), existing agents may fall behind and develop conflicts. The rebase action sends a command into the agent's tmux pane instructing it to:
 
@@ -133,7 +133,7 @@ This brings the agent's branch up to date with the source branch.
 
 ### 7. Focus
 
-**TUI key:** `Enter`
+**TUI key:** `Enter` or `o`
 
 Switches your tmux focus to the agent's window so you can interact with it directly.
 
@@ -156,13 +156,13 @@ Destroys the entire session:
 |---|---|---|
 | `s` | Spawn new agent | Always |
 | `m` | Merge agent | Agent has commits, no conflicts |
-| `r` | Rebase agent | Agent has conflicts, is idle |
+| `b` | Rebase agent | Agent has conflicts |
 | `a` | Accept merge | Agent is merged |
-| `x` | Reject merge | Agent is merged |
-| `c` | Cancel agent | Agent is working (not merged) |
-| `Enter` | Focus agent window | Agent selected |
-| `=` | Show diff details | Agent has commits |
-| `j`/`k` or arrows | Navigate agents | Always |
+| `r` | Reject merge | Agent is merged |
+| `c` | Cancel agent | Agent is not merged |
+| `Enter` / `o` | Focus agent window | Agent selected |
+| `e` | Show diff details | Agent has commits |
+| `h`/`j`/`k`/`l` or arrows | Navigate agents | Always |
 | `q` | Quit TUI | Always |
 
 ## Design Notes
