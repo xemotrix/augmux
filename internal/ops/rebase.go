@@ -15,7 +15,7 @@ func SendRebase(repoRoot string, idx int) error {
 	if err != nil {
 		return fmt.Errorf("agent %d not found: %w", idx, err)
 	}
-	if err := core.TmuxRun("send-keys", "-t", ag.Window, "/augmux-yolobase", "Enter"); err != nil {
+	if err := core.TmuxRun("send-keys", "-t", ag.Window, "/augmux-rebase"); err != nil {
 		return err
 	}
 	return core.TmuxRun("select-window", "-t", ag.Window)

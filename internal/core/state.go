@@ -63,10 +63,6 @@ const (
 	AgentStatusConflict
 )
 
-func (a *Agent) HasCommits() bool {
-	return a != nil && a.CommitsAhead > 0
-}
-
 func (a *Agent) Status() AgentStatus {
 	if a == nil {
 		return AgentStatusNone

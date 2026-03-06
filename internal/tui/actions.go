@@ -8,6 +8,10 @@ import (
 	"github.com/xemotrix/augmux/internal/ops"
 )
 
+type ActionHandler struct {
+	repoRoot string
+}
+
 // TUIAction represents an action the user triggered from the interactive TUI.
 type TUIAction int
 
@@ -56,173 +60,199 @@ type actionResultMsg struct {
 	result ActionResult
 }
 
-func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
-	return func(result TUIResult, spawnName string) ActionResult {
-		idx := result.AgentIdx
-
-		agentLabel := fmt.Sprintf("agent %d", idx)
-		if idx >= 0 {
-			if ag, err := core.ReadAgent(repoRoot, idx); err == nil && ag.Description != "" {
-				agentLabel = fmt.Sprintf("%q", ag.Description)
-			}
+func (ah *ActionHandler) handleMerge(idx int, agentLabel string) ActionResult {
+	if idx == -1 {
+		return ActionDone{}
+	}
+	if err := ops.Merge(ah.repoRoot, idx); err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Merge failed: %s", err)},
+			Level: ToastError,
 		}
+	}
+	return ActionDone{
+		Lines: []string{fmt.Sprintf("Merged %s", agentLabel)},
+		Level: ToastSuccess,
+	}
+}
 
-		switch result.Action {
-		case ActionMerge:
-			if idx >= 0 {
-				if err := ops.MergeOne(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Merge failed: %s", err)},
-						Level: ToastError,
-					}
-				}
+func (ah *ActionHandler) handleSpawn(idx int, spawnName string) ActionResult {
+	if err := ops.SpawnByName(ah.repoRoot, spawnName); err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Spawn failed: %s", err)},
+			Level: ToastError,
+		}
+	}
+	return ActionDone{
+		Lines: []string{fmt.Sprintf("Spawned %q", spawnName)},
+		Level: ToastSuccess,
+	}
+}
+
+func (ah *ActionHandler) handleAccept(idx int, agentLabel string) ActionResult {
+	if idx == -1 {
+		return ActionDone{}
+	}
+	if err := ops.Accept(ah.repoRoot, idx); err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Accept failed: %s", err)},
+			Level: ToastError,
+		}
+	}
+	return ActionDone{
+		Lines: []string{fmt.Sprintf("Accepted %s", agentLabel)},
+		Level: ToastSuccess,
+	}
+}
+
+func (ah *ActionHandler) handleReject(idx int, agentLabel string) ActionResult {
+	if idx == -1 {
+		return ActionDone{}
+	}
+	if err := ops.Reject(ah.repoRoot, idx); err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Reject failed: %s", err)},
+			Level: ToastError,
+		}
+	}
+	return ActionDone{
+		Lines: []string{fmt.Sprintf("Rejected %s", agentLabel)},
+		Level: ToastSuccess,
+	}
+}
+
+func (ah *ActionHandler) handleFocus(idx int) ActionResult {
+	if idx == -1 {
+		return ActionDone{}
+	}
+	ag, err := core.ReadAgent(ah.repoRoot, idx)
+	if err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Failed to focus: %s", err)},
+			Level: ToastError,
+		}
+	}
+	core.TmuxRun("select-window", "-t", ag.Window)
+	return ActionDone{}
+}
+
+func (ah *ActionHandler) handleRebase(idx int, agentLabel string) ActionResult {
+	if idx == -1 {
+		return ActionDone{}
+	}
+	if err := ops.SendRebase(ah.repoRoot, idx); err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Rebase failed: %s", err)},
+			Level: ToastError,
+		}
+	}
+	return ActionDone{
+		Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
+		Level: ToastSuccess,
+	}
+}
+
+func (ah *ActionHandler) confirmCancelRequest(idx int, agentLabel, detail string) MenuRequest {
+	return MenuRequest{
+		Title: fmt.Sprintf("Cancel %s? It has %s that will be lost.", agentLabel, detail),
+		Options: []string{
+			"Yes — discard and cancel",
+			"No — keep agent",
+		},
+		Callback: func(choice int) ActionResult {
+			if choice != 0 {
 				return ActionDone{
-					Lines: []string{fmt.Sprintf("Merged %s", agentLabel)},
-					Level: ToastSuccess,
+					Lines: []string{"Cancel aborted"},
+					Level: ToastInfo,
 				}
 			}
-
-		case ActionSpawn:
-			if err := ops.SpawnByName(repoRoot, spawnName); err != nil {
+			if err := ops.Cancel(ah.repoRoot, idx); err != nil {
 				return ActionDone{
-					Lines: []string{fmt.Sprintf("Spawn failed: %s", err)},
+					Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
 					Level: ToastError,
 				}
 			}
 			return ActionDone{
-				Lines: []string{fmt.Sprintf("Spawned %q", spawnName)},
+				Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
 				Level: ToastSuccess,
 			}
+		},
+	}
+}
 
-		case ActionAccept:
-			if idx >= 0 {
-				if err := ops.AcceptOne(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Accept failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Accepted %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionReject:
-			if idx >= 0 {
-				if err := ops.RejectOne(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Reject failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Rejected %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionCancel:
-			if idx >= 0 {
-				ag, err := core.ReadAgent(repoRoot, idx)
-				if err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-
-				srcBranch := core.SourceBranch(repoRoot)
-				ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
-				aheadNum := 0
-				fmt.Sscanf(ahead, "%d", &aheadNum)
-
-				dirty := false
-				if core.IsDir(ag.Worktree) {
-					status, _ := core.Git(ag.Worktree, "status", "--porcelain")
-					dirty = status != ""
-				}
-
-				if aheadNum > 0 || dirty {
-					var warnings []string
-					if aheadNum > 0 {
-						commitWord := "commit"
-						if aheadNum != 1 {
-							commitWord = "commits"
-						}
-						warnings = append(warnings, fmt.Sprintf("%d %s", aheadNum, commitWord))
-					}
-					if dirty {
-						warnings = append(warnings, "uncommitted changes")
-					}
-					detail := strings.Join(warnings, " and ")
-
-					return MenuRequest{
-						Title: fmt.Sprintf("Cancel %s? It has %s that will be lost.", agentLabel, detail),
-						Options: []string{
-							"Yes — discard and cancel",
-							"No — keep agent",
-						},
-						Callback: func(choice int) ActionResult {
-							if choice == 0 {
-								if err := ops.CancelOne(repoRoot, idx); err != nil {
-									return ActionDone{
-										Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
-										Level: ToastError,
-									}
-								}
-								return ActionDone{
-									Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
-									Level: ToastSuccess,
-								}
-							}
-							return ActionDone{
-								Lines: []string{"Cancel aborted"},
-								Level: ToastInfo,
-							}
-						},
-					}
-				}
-
-				if err := ops.CancelOne(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionRebase:
-			if idx >= 0 {
-				if err := ops.SendRebase(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Rebase failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionFocus:
-			if idx >= 0 {
-				ag, err := core.ReadAgent(repoRoot, idx)
-				if err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Failed to focus: %s", err)},
-						Level: ToastError,
-					}
-				}
-				core.TmuxRun("select-window", "-t", ag.Window)
-			}
+func (ah *ActionHandler) handleCancel(idx int, agentLabel string) ActionResult {
+	if idx == -1 {
+		return ActionDone{}
+	}
+	ag, err := core.ReadAgent(ah.repoRoot, idx)
+	if err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
+			Level: ToastError,
 		}
+	}
+	if ag == nil {
+		return ActionDone{}
+	}
 
+	if ag.UncommittedCount > 0 || ag.CommitsAhead > 0 {
+		var warnings []string
+		if ag.CommitsAhead > 0 {
+			commitWord := "commits"
+			if ag.CommitsAhead == 1 {
+				commitWord = "commit"
+			}
+			warnings = append(warnings, fmt.Sprintf("%d %s", ag.CommitsAhead, commitWord))
+		}
+		if ag.UncommittedCount > 0 {
+			uncommitWord := "uncommitted changes"
+			if ag.UncommittedCount == 1 {
+				uncommitWord = "uncommitted change"
+			}
+			warnings = append(warnings, fmt.Sprintf("%d %s", ag.UncommittedCount, uncommitWord))
+		}
+		detail := strings.Join(warnings, " and ")
+		return ah.confirmCancelRequest(idx, agentLabel, detail)
+	}
+
+	if err := ops.Cancel(ah.repoRoot, idx); err != nil {
+		return ActionDone{
+			Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
+			Level: ToastError,
+		}
+	}
+	return ActionDone{
+		Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
+		Level: ToastSuccess,
+	}
+}
+
+func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult {
+	idx := result.AgentIdx
+
+	agentLabel := fmt.Sprintf("agent %d", idx)
+	if idx >= 0 {
+		if ag, err := core.ReadAgent(ah.repoRoot, idx); err == nil && ag.Description != "" {
+			agentLabel = fmt.Sprintf("%q", ag.Description)
+		}
+	}
+
+	switch result.Action {
+	case ActionMerge:
+		return ah.handleMerge(idx, agentLabel)
+	case ActionSpawn:
+		return ah.handleSpawn(idx, spawnName)
+	case ActionAccept:
+		return ah.handleAccept(idx, agentLabel)
+	case ActionReject:
+		return ah.handleReject(idx, agentLabel)
+	case ActionRebase:
+		return ah.handleRebase(idx, agentLabel)
+	case ActionFocus:
+		return ah.handleFocus(idx)
+	case ActionCancel:
+		return ah.handleCancel(idx, agentLabel)
+	default:
 		return ActionDone{}
 	}
 }

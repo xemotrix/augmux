@@ -29,7 +29,7 @@ func ensureSession(repoRoot string) error {
 	return nil
 }
 
-func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
+func spawn(repoRoot, name string, ag *agent.AgentDef) error {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -96,7 +96,7 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
 func appendToGitignore(path, entry string) {
 	data, _ := os.ReadFile(path)
 	content := string(data)
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if strings.TrimSpace(line) == entry {
 			return
 		}
@@ -126,5 +126,5 @@ func SpawnByName(repoRoot string, name string) error {
 	if err != nil {
 		return err
 	}
-	return spawnOne(repoRoot, name, ag)
+	return spawn(repoRoot, name, ag)
 }

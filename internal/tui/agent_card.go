@@ -11,11 +11,11 @@ import (
 
 type AgentCard struct{}
 
-func (ac *AgentCard) View(
-	a *core.Agent,
-	spinnerFrame string,
-	selected bool,
-) string {
+func (ac *AgentCard) View(a *core.Agent, spinnerFrame string, selected bool) string {
+	if a == nil {
+		return ""
+	}
+
 	stateColor := ac.borderColor(a)
 	bdrStyle := lipgloss.NewStyle().Foreground(stateColor)
 
@@ -88,7 +88,7 @@ func activityIndicator(a *core.Agent, spinnerFrame string) string {
 func (ac *AgentCard) borderColor(a *core.Agent) lipgloss.TerminalColor {
 	switch a.Status() {
 	case core.AgentStatusIdle:
-		if a.HasCommits() {
+		if a.CommitsAhead > 0 {
 			return styles.ColorGreen
 		}
 		return styles.ColorDimGray

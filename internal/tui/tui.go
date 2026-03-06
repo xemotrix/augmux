@@ -42,13 +42,13 @@ type TUIModel struct {
 	quitting      bool
 	mode          tuiMode
 	spinner       spinner.Model
-	textInput     textinput.Model                      // for spawn
-	toaster       toaster                              // toast notifications
-	actionHandler func(TUIResult, string) ActionResult // returns action result
-	menuTitle     string                               // inline menu title
-	menuOptions   []string                             // inline menu options
-	menuCursor    int                                  // inline menu cursor
-	menuCallback  func(int) ActionResult               // inline menu callback
+	textInput     textinput.Model        // for spawn
+	toaster       toaster                // toast notifications
+	actionHandler ActionHandler          // returns action result
+	menuTitle     string                 // inline menu title
+	menuOptions   []string               // inline menu options
+	menuCursor    int                    // inline menu cursor
+	menuCallback  func(int) ActionResult // inline menu callback
 	actionBar     ActionBar
 	agentCard     AgentCard
 
@@ -188,9 +188,8 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		agentIdx := -1
 		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
-		handler := m.actionHandler
 		return m, func() tea.Msg {
-			return actionResultMsg{result: handler(result, name)}
+			return actionResultMsg{result: m.actionHandler.Handle(result, name)}
 		}
 	case "esc", "ctrl+c":
 		m.mode = modeNormal
@@ -321,7 +320,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
-		if selStatus == core.AgentStatusWip && sel.HasCommits() {
+		if selStatus == core.AgentStatusWip && sel.CommitsAhead > 0 {
 			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
@@ -382,9 +381,8 @@ func (m TUIModel) updateConflictTree(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
-	handler := m.actionHandler
 	return m, func() tea.Msg {
-		return actionResultMsg{result: handler(result, "")}
+		return actionResultMsg{result: m.actionHandler.Handle(result, "")}
 	}
 }
 
@@ -505,7 +503,7 @@ func (m TUIModel) View() string {
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	bar := m.actionBar.View(selected.Status(), selected.HasCommits(), m.width-2)
+	bar := m.actionBar.View(selected, m.width-2)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	contentHeight := lipgloss.Height(content)
@@ -527,12 +525,13 @@ func RunInteractiveTUI(repoRoot string) {
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
 	)
+	actionHandler := ActionHandler{repoRoot: repoRoot}
 	m := TUIModel{
 		repoRoot:      repoRoot,
 		width:         100,
 		spinner:       s,
 		toaster:       newToaster(),
-		actionHandler: tuiActionHandler(repoRoot),
+		actionHandler: actionHandler,
 	}
 	if !agent.IsConfigured() {
 		defs := agent.KnownAgentDefs()

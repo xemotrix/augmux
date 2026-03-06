@@ -9,12 +9,14 @@ import (
 
 type ActionBar struct{}
 
-func (ab *ActionBar) View(status core.AgentStatus, hasCommits bool, width int) string {
+func (ab *ActionBar) View(selectedAgent *core.Agent, width int) string {
 	type action struct {
 		name      string
 		highlight string
 		enabled   bool
 	}
+	status := selectedAgent.Status()
+	hasCommits := selectedAgent != nil && selectedAgent.CommitsAhead > 0
 
 	actions := []action{
 		{"f#cus", "o", status == core.AgentStatusNone},

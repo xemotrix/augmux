@@ -6,7 +6,7 @@ import (
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-func MergeOne(repoRoot string, idx int) error {
+func Merge(repoRoot string, idx int) error {
 	var err error
 	repoRoot, err = core.Abs(repoRoot)
 	if err != nil {
@@ -52,7 +52,7 @@ func MergeOne(repoRoot string, idx int) error {
 	// Count ahead
 	ahead, err := core.Git(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
 	if err != nil || ahead == "0" || ahead == "" {
-		teardownOne(repoRoot, idx)
+		teardown(repoRoot, idx)
 		return nil
 	}
 
