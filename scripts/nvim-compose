@@ -10,19 +10,19 @@
 # repo lives on your machine):
 #
 #   # Normal mode — open an empty compose editor
-#   bind-key -n C-o run-shell "/path/to/augmux/scripts/nvim-compose"
+#   bind-key -n C-n run-shell "/path/to/augmux/scripts/nvim-compose"
 #
 #   # Copy-mode (vi) — grab the selection and open compose with it pre-filled
-#   bind-key -T copy-mode-vi C-o send-keys -X copy-pipe-and-cancel "/path/to/augmux/scripts/nvim-compose --from-stdin"
+#   bind-key -T copy-mode-vi C-n send-keys -X copy-pipe-and-cancel "/path/to/augmux/scripts/nvim-compose --from-stdin"
 #
 # Then reload tmux config:
 #
 #   tmux source-file ~/.tmux.conf
 #
-# Ctrl-O (no prefix needed) will open a floating editor popup. Write your
+# Ctrl-n (no prefix needed) will open a floating editor popup. Write your
 # text, save and quit, and it gets pasted into the pane you came from.
 #
-# If you press Ctrl-O while in tmux copy-mode (vi) with text selected, the
+# If you press Ctrl-n while in tmux copy-mode (vi) with text selected, the
 # selection is piped into the editor so you can edit it before pasting.
 #
 # REQUIREMENTS
