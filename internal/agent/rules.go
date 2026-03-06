@@ -44,7 +44,7 @@ func BuildCursorMDC(rulesContent string) string {
 	return fmt.Sprintf("---\ndescription: augmux agent rules\nalwaysApply: true\n---\n%s", rulesContent)
 }
 
-// RebaseYoloCommandTemplate is the Cursor slash command prompt for /augmux-rebase-yolo.
+// RebaseYoloCommandTemplate is the Cursor slash command prompt for /augmux-yolobase.
 // This version automatically resolves conflicts without user confirmation.
 // Placeholder: {{SOURCE_BRANCH}}
 const RebaseYoloCommandTemplate = `Rebase your current branch onto the latest ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch).
