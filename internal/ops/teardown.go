@@ -13,19 +13,16 @@ func teardownOne(repoRoot string, idx int) {
 		return
 	}
 
-	// Kill tmux window (use stored window name)
 	core.TmuxRun("kill-window", "-t", fmt.Sprintf("=%s", ag.Window))
 
-	// Remove worktree
 	if core.IsDir(ag.Worktree) {
 		core.GitMust(repoRoot, "worktree", "remove", "--force", ag.Worktree)
 	}
 	core.GitMust(repoRoot, "worktree", "prune")
 
-	// Delete branch
+	core.ClearConflictCache(ag.Branch)
 	core.GitMust(repoRoot, "branch", "-D", ag.Branch)
 
-	// Remove state
 	os.RemoveAll(core.TaskDir(repoRoot, idx))
 
 	maybeCleanupSession(repoRoot)

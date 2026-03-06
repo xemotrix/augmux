@@ -53,12 +53,58 @@ type AgentState struct {
 	UncommittedCount int    // number of uncommitted files in worktree
 }
 
+// conflictCacheEntry stores a cached merge-tree result keyed on the resolved
+// refs of both branches. The expensive merge-tree call is skipped when
+// neither branch has moved since the last check.
+type conflictCacheEntry struct {
+	srcRef   string
+	agentRef string
+	result   bool
+}
+
+var (
+	conflictCache   = make(map[string]*conflictCacheEntry) // key: agentBranch name
+	conflictCacheMu sync.Mutex
+)
+
 // DetectConflicts checks whether merging agentBranch into srcBranch would
 // produce conflicts. It uses "git merge-tree --write-tree" which performs an
-// in-memory merge without touching the working tree or index.
+// in-memory merge without touching the working tree or index. Results are
+// cached by branch tip refs so the expensive merge-tree only runs when a
+// branch actually moves.
 func DetectConflicts(repoRoot, srcBranch, agentBranch string) bool {
+	srcRef, err1 := Git(repoRoot, "rev-parse", srcBranch)
+	agentRef, err2 := Git(repoRoot, "rev-parse", agentBranch)
+	if err1 != nil || err2 != nil {
+		_, err := Git(repoRoot, "merge-tree", "--write-tree", srcBranch, agentBranch)
+		return err != nil
+	}
+
+	conflictCacheMu.Lock()
+	defer conflictCacheMu.Unlock()
+
+	if entry, ok := conflictCache[agentBranch]; ok {
+		if entry.srcRef == srcRef && entry.agentRef == agentRef {
+			return entry.result
+		}
+	}
+
 	_, err := Git(repoRoot, "merge-tree", "--write-tree", srcBranch, agentBranch)
-	return err != nil
+	hasConflicts := err != nil
+
+	conflictCache[agentBranch] = &conflictCacheEntry{
+		srcRef:   srcRef,
+		agentRef: agentRef,
+		result:   hasConflicts,
+	}
+	return hasConflicts
+}
+
+// ClearConflictCache removes the cached conflict result for a branch.
+func ClearConflictCache(agentBranch string) {
+	conflictCacheMu.Lock()
+	defer conflictCacheMu.Unlock()
+	delete(conflictCache, agentBranch)
 }
 
 // FindRepoRoot finds the git repo root from the current directory.
@@ -185,6 +231,34 @@ func detectActivity(window string) string {
 		return ActivityIdle
 	}
 	return ActivityWorking
+}
+
+// ReadAndEnrichAgents reads and enriches all agents in parallel.
+// Each agent's ReadAgent + EnrichAgent runs in its own goroutine.
+func ReadAndEnrichAgents(repoRoot string, indices []int, srcBranch string) []*AgentState {
+	results := make([]*AgentState, len(indices))
+	var wg sync.WaitGroup
+	for i, idx := range indices {
+		wg.Add(1)
+		go func(i, idx int) {
+			defer wg.Done()
+			a, err := ReadAgent(repoRoot, idx)
+			if err != nil {
+				return
+			}
+			EnrichAgent(repoRoot, srcBranch, a)
+			results[i] = a
+		}(i, idx)
+	}
+	wg.Wait()
+
+	var out []*AgentState
+	for _, a := range results {
+		if a != nil {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // ListAgents returns all agent indices, sorted.

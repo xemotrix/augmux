@@ -34,6 +34,7 @@ const (
 
 type TUIModel struct {
 	repoRoot      string
+	srcBranch     string // cached source branch (set in refreshAgents)
 	width         int
 	height        int
 	cursor        int // index into the agents slice
@@ -61,16 +62,8 @@ func tickEvery(d time.Duration) tea.Cmd {
 
 func (m *TUIModel) refreshAgents() {
 	indices := core.ListAgents(m.repoRoot)
-	srcBranch := core.SourceBranch(m.repoRoot)
-	m.agents = nil
-	for _, idx := range indices {
-		a, err := core.ReadAgent(m.repoRoot, idx)
-		if err != nil {
-			continue
-		}
-		core.EnrichAgent(m.repoRoot, srcBranch, a)
-		m.agents = append(m.agents, a)
-	}
+	m.srcBranch = core.SourceBranch(m.repoRoot)
+	m.agents = core.ReadAndEnrichAgents(m.repoRoot, indices, m.srcBranch)
 	if m.cursor >= len(m.agents) {
 		m.cursor = len(m.agents) - 1
 	}
@@ -477,7 +470,7 @@ func (m TUIModel) View() string {
 		return viewConflictTree(m.conflictTree, m.width, m.height)
 	}
 
-	srcBranch := core.SourceBranch(m.repoRoot)
+	srcBranch := m.srcBranch
 
 	outerPad := lipgloss.NewStyle().PaddingLeft(2)
 
