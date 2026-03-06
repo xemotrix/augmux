@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	// Kanagawa color palette
+	// Kanagawa color palette (https://github.com/rebelot/kanagawa.nvim)
 	ColorAccent  = lipgloss.Color("#FF9E3B") // roninYellow — accent/brand
 	ColorGreen   = lipgloss.Color("#98BB6C") // springGreen
 	ColorYellow  = lipgloss.Color("#DCA561") // autumnYellow
