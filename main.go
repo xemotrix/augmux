@@ -1,6 +1,8 @@
 package main
 
 // conflict 123
+// conflict 42
+// conflict 57
 
 import (
 	"fmt"
