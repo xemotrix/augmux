@@ -30,7 +30,6 @@ const (
 	modeSpawning             // text input for spawn task name
 	modeMenu                 // inline menu selection
 	modeAgentSetup           // agent CLI picker shown on startup
-	modeConflictTree         // full-screen conflict tree overlay
 )
 
 type TUIModel struct {
@@ -53,14 +52,10 @@ type TUIModel struct {
 	actionBar     ActionBar
 	agentCard     AgentCard
 
-	conflictTree *conflictTreeState // non-nil when viewing conflict tree
-	commitRule   bool               // spawn-time toggle: agent commits after changes
+	commitRule bool // spawn-time toggle: agent commits after changes
 }
 
-type (
-	tickMsg         time.Time
-	conflictTreeMsg struct{ state *conflictTreeState }
-)
+type tickMsg = time.Time
 
 func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -111,15 +106,6 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toaster, cmd = m.toaster.Update(msg)
 		return m, cmd
 
-	case conflictTreeMsg:
-		if msg.state != nil && len(msg.state.files) > 0 {
-			m.conflictTree = msg.state
-			m.mode = modeConflictTree
-		} else {
-			return m, AddToast("No changed files found", ToastWarning)
-		}
-		return m, nil
-
 	case actionResultMsg:
 		switch v := msg.result.(type) {
 		case ActionDone:
@@ -152,8 +138,6 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSpawning(msg)
 		case modeMenu:
 			return m.updateMenu(msg)
-		case modeConflictTree:
-			return m.updateConflictTree(msg)
 		default:
 			return m.updateNormal(msg)
 		}
@@ -333,42 +317,10 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.runInlineAction(ActionReject, agentIdx)
 	case "c":
 		return m.runInlineAction(ActionCancel, agentIdx)
-	case "e":
-		if sel != nil && sel.CommitsAhead > 0 {
-			repoRoot := m.repoRoot
-			ag := sel
-			return m, func() tea.Msg {
-				return conflictTreeMsg{state: computeConflictTree(repoRoot, ag)}
-			}
-		}
 	case "b":
 		return m.runInlineAction(ActionRebase, agentIdx)
 	case "enter", "o":
 		return m.runInlineAction(ActionFocus, agentIdx)
-	}
-	return m, nil
-}
-
-func (m TUIModel) updateConflictTree(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	halfPage := max(m.height/2, 1)
-
-	switch msg.String() {
-	case "j", "down":
-		m.conflictTree.scroll++
-	case "k", "up":
-		if m.conflictTree.scroll > 0 {
-			m.conflictTree.scroll--
-		}
-	case "ctrl+d":
-		m.conflictTree.scroll += halfPage
-	case "ctrl+u":
-		m.conflictTree.scroll -= halfPage
-		if m.conflictTree.scroll < 0 {
-			m.conflictTree.scroll = 0
-		}
-	default:
-		m.mode = modeNormal
-		m.conflictTree = nil
 	}
 	return m, nil
 }
@@ -423,10 +375,6 @@ func renderMenu(title string, options []string, cursor int) string {
 func (m TUIModel) View() string {
 	if m.quitting {
 		return ""
-	}
-
-	if m.mode == modeConflictTree && m.conflictTree != nil {
-		return viewConflictTree(m.conflictTree, m.height)
 	}
 
 	srcBranch := m.srcBranch

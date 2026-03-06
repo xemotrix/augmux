@@ -23,7 +23,6 @@ func (ab *ActionBar) View(selectedAgent *core.Agent, width int) string {
 		{"#pawn", "s", validAction(ActionSpawn, status)},
 		{"#erge", "m", validAction(ActionMerge, status) && hasCommits},
 		{"re#ase", "b", validAction(ActionRebase, status)},
-		{"d#tails", "e", hasCommits},
 		{"#ccept", "a", validAction(ActionAccept, status)},
 		{"#eject", "r", validAction(ActionReject, status)},
 		{"#ancel", "c", validAction(ActionCancel, status)},
