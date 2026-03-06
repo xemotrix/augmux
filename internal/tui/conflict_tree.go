@@ -45,10 +45,10 @@ func computeConflictTree(repoRoot string, ag *core.AgentState) *conflictTreeStat
 	agentFiles := splitNonEmpty(core.GitMust(repoRoot, "diff", "--name-only", mergeBase+".."+ag.Branch))
 	sourceFiles := splitNonEmpty(core.GitMust(repoRoot, "diff", "--name-only", mergeBase+".."+srcBranch))
 
-	// merge-tree --write-tree --name-only exits non-zero on conflicts and
-	// prints conflict file names after the tree OID line.
-	mtOut, _ := core.Git(repoRoot, "merge-tree", "--write-tree", "--name-only", srcBranch, ag.Branch)
-	conflictFiles := parseConflictFiles(mtOut)
+	// Run merge-tree discarding stdout (which can be enormous) and parse
+	// CONFLICT file names from stderr instead.
+	mtStderr, _ := core.GitStderr(repoRoot, "merge-tree", "--write-tree", srcBranch, ag.Branch)
+	conflictFiles := parseConflictFilesFromStderr(mtStderr)
 
 	sourceSet := toSet(sourceFiles)
 	conflictSet := toSet(conflictFiles)
@@ -86,26 +86,29 @@ func computeConflictTree(repoRoot string, ag *core.AgentState) *conflictTreeStat
 	return state
 }
 
-// parseConflictFiles extracts conflict filenames from git merge-tree
-// --name-only output. The first line is the tree OID; subsequent non-empty
-// lines (before any informational "Auto-merging" / "CONFLICT" messages) are
-// the conflicted paths.
-func parseConflictFiles(output string) []string {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) <= 1 {
+// parseConflictFilesFromStderr extracts conflict filenames from the stderr
+// output of "git merge-tree --write-tree". Stderr contains lines like:
+//
+//	CONFLICT (content): Merge conflict in path/to/file.go
+//	Auto-merging some/other/file.go
+//
+// We extract the file path from each CONFLICT line.
+func parseConflictFilesFromStderr(stderr string) []string {
+	if stderr == "" {
 		return nil
 	}
 	var files []string
-	for _, line := range lines[1:] {
+	for _, line := range strings.Split(stderr, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" {
-			break
+		if !strings.HasPrefix(line, "CONFLICT") {
+			continue
 		}
-		// Informational messages start with "Auto-merging" or "CONFLICT"
-		if strings.HasPrefix(line, "Auto-merging") || strings.HasPrefix(line, "CONFLICT") {
-			break
+		if idx := strings.LastIndex(line, " in "); idx >= 0 {
+			file := strings.TrimSpace(line[idx+4:])
+			if file != "" {
+				files = append(files, file)
+			}
 		}
-		files = append(files, line)
 	}
 	return files
 }

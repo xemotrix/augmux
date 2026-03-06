@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -41,6 +42,19 @@ func Git(dir string, args ...string) (string, error) {
 func GitMust(dir string, args ...string) string {
 	out, _ := Git(dir, args...)
 	return out
+}
+
+// GitStderr runs a git command discarding stdout and returning only stderr.
+// Useful for commands like "merge-tree --write-tree" where stdout can be huge
+// but the information we need (CONFLICT messages) is on stderr.
+func GitStderr(dir string, args ...string) (string, error) {
+	fullArgs := append([]string{"-C", dir}, args...)
+	cmd := exec.Command("git", fullArgs...)
+	var stderr bytes.Buffer
+	cmd.Stdout = io.Discard
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return strings.TrimSpace(stderr.String()), err
 }
 
 // TmuxRun runs a tmux command.
