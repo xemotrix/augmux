@@ -44,10 +44,10 @@ func BuildCursorMDC(rulesContent string) string {
 	return fmt.Sprintf("---\ndescription: augmux agent rules\nalwaysApply: true\n---\n%s", rulesContent)
 }
 
-// RebaseYoloCommandTemplate is the Cursor slash command prompt for /augmux-rebase-yolo.
+// YolobaseCommandTemplate is the Cursor slash command prompt for /augmux-yolobase.
 // This version automatically resolves conflicts without user confirmation.
 // Placeholder: {{SOURCE_BRANCH}}
-const RebaseYoloCommandTemplate = `Rebase your current branch onto the latest ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch).
+const YolobaseCommandTemplate = `Rebase your current branch onto the latest ` + "`{{SOURCE_BRANCH}}`" + ` (the source branch).
 
 Follow these steps exactly:
 
@@ -81,9 +81,9 @@ Follow these steps exactly:
 Do NOT use ` + "`git rebase --abort`" + ` unless you truly cannot resolve a conflict. Do NOT push to any remote.
 `
 
-// BuildRebaseYoloCommand renders the yolo rebase command template for the given source branch.
-func BuildRebaseYoloCommand(sourceBranch string) string {
-	return strings.Replace(RebaseYoloCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+// BuildYolobaseCommand renders the yolobase command template for the given source branch.
+func BuildYolobaseCommand(sourceBranch string) string {
+	return strings.Replace(YolobaseCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
 }
 
 // RebaseCommandTemplate is the Cursor slash command prompt for /augmux-rebase.

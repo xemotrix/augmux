@@ -100,8 +100,8 @@ func spawnOne(repoRoot, name string, ag *agent.AgentDef) (retErr error) {
 		os.MkdirAll(cursorCmdsDir, 0o755)
 		rebaseCmd := agent.BuildRebaseCommand(srcBranch)
 		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-rebase.md"), rebaseCmd)
-		rebaseYoloCmd := agent.BuildRebaseYoloCommand(srcBranch)
-		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-rebase-yolo.md"), rebaseYoloCmd)
+		yolobaseCmd := agent.BuildYolobaseCommand(srcBranch)
+		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-yolobase.md"), yolobaseCmd)
 
 		squashCmd := agent.BuildSquashCommand(srcBranch)
 		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-squash.md"), squashCmd)
