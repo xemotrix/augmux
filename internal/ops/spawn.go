@@ -70,6 +70,9 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 		rebaseCmd := agent.BuildRebaseCommand(srcBranch)
 		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-rebase.md"), rebaseCmd)
 
+		squashCmd := agent.BuildSquashCommand(srcBranch)
+		core.WriteFileContent(filepath.Join(cursorCmdsDir, "augmux-squash.md"), squashCmd)
+
 		gitignorePath := filepath.Join(wtPath, ".gitignore")
 		appendToGitignore(gitignorePath, ".cursor/")
 	}

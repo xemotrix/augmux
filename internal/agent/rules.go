@@ -85,6 +85,37 @@ func BuildRebaseCommand(sourceBranch string) string {
 	return strings.Replace(RebaseCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
 }
 
+// SquashCommandTemplate is the Cursor slash command prompt for /augmux-squash.
+// Placeholder: {{SOURCE_BRANCH}}
+const SquashCommandTemplate = `Squash all commits on your current branch into a single commit.
+
+Follow these steps exactly:
+
+1. **Commit uncommitted work.** If there are any uncommitted changes, stage and commit them:
+` + "   ```" + `
+   git add -A && git commit -m "augmux: auto-commit before squash"
+` + "   ```" + `
+
+2. **Soft-reset back to the source branch** to collapse all commits while keeping your changes staged:
+` + "   ```" + `
+   git reset --soft {{SOURCE_BRANCH}}
+` + "   ```" + `
+
+3. **Create a single commit** with a clear, descriptive message summarizing all the work done on this branch:
+` + "   ```" + `
+   git commit -m "<summarize all changes in one concise message>"
+` + "   ```" + `
+
+4. Verify that your working tree is clean (` + "`git status`" + ` shows nothing to commit) and the branch has exactly one commit ahead of ` + "`{{SOURCE_BRANCH}}`" + `.
+
+Do NOT push to any remote.
+`
+
+// BuildSquashCommand renders the squash command template for the given source branch.
+func BuildSquashCommand(sourceBranch string) string {
+	return strings.Replace(SquashCommandTemplate, "{{SOURCE_BRANCH}}", sourceBranch, -1)
+}
+
 // SpawnCmdWithRules returns the shell command to start the agent with a rules file.
 // For agents that don't support rules, it falls back to the plain command.
 func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
@@ -101,6 +132,18 @@ func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
 // instance that performs only the rebase operation. The prompt is passed as a
 // CLI argument so no send-keys interaction is needed.
 func (a *AgentDef) RebasePaneCmd(prompt, rulesFile string) string {
+	return a.oneOffPaneCmd(prompt, rulesFile)
+}
+
+// SquashPaneCmd returns the shell command to run a non-interactive agent
+// instance that performs the squash operation.
+func (a *AgentDef) SquashPaneCmd(prompt, rulesFile string) string {
+	return a.oneOffPaneCmd(prompt, rulesFile)
+}
+
+// oneOffPaneCmd builds the shell command for a one-shot agent invocation
+// in a split pane (used by both rebase and squash).
+func (a *AgentDef) oneOffPaneCmd(prompt, rulesFile string) string {
 	escaped := strings.ReplaceAll(prompt, "'", "'\\''")
 	switch a.ID {
 	case "auggie":

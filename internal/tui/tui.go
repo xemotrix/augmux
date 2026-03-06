@@ -28,6 +28,7 @@ const (
 	ActionCancel
 	ActionFocus
 	ActionRebase
+	ActionSquash
 )
 
 // TUIResult holds the result of an interactive TUI session.
@@ -380,6 +381,10 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if isWip && sel.HasConflicts && isIdle {
 			return m.runInlineAction(ActionRebase, agentIdx)
 		}
+	case "x":
+		if isWip && hasCommits {
+			return m.runInlineAction(ActionSquash, agentIdx)
+		}
 	case "enter":
 		if sel != nil {
 			return m.runInlineAction(ActionFocus, agentIdx)
@@ -427,6 +432,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 		{"spawn", true},
 		{"merge", isWip && hasCommits},
 		{"re|base", isWip && hasConflicts && isIdle},
+		{"x:squash", isWip && hasCommits},
 		{"accept", isMerged},
 		{"reject", isMerged || isResolving},
 		{"cancel", isWip || isResolving},
@@ -786,6 +792,20 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 				}
 				return ActionDone{
 					Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
+					Level: ToastSuccess,
+				}
+			}
+
+		case ActionSquash:
+			if idx >= 0 {
+				if err := ops.SendSquash(repoRoot, idx); err != nil {
+					return ActionDone{
+						Lines: []string{fmt.Sprintf("Squash send failed: %s", err)},
+						Level: ToastError,
+					}
+				}
+				return ActionDone{
+					Lines: []string{fmt.Sprintf("Sent squash command to %s", agentLabel)},
 					Level: ToastSuccess,
 				}
 			}
