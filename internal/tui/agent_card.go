@@ -87,10 +87,9 @@ func activityIndicator(a *core.Agent, spinnerFrame string) string {
 
 func (ac *AgentCard) borderColor(a *core.Agent) lipgloss.TerminalColor {
 	switch a.Status() {
+	case core.AgentStatusWip:
+		return styles.ColorGreen
 	case core.AgentStatusIdle:
-		if a.CommitsAhead > 0 {
-			return styles.ColorGreen
-		}
 		return styles.ColorDimGray
 	case core.AgentStatusWorking:
 		return styles.ColorYellow

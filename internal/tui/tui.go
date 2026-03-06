@@ -68,7 +68,7 @@ func tickEvery(d time.Duration) tea.Cmd {
 func (m *TUIModel) refreshAgents() {
 	indices := core.ListAgents(m.repoRoot)
 	m.srcBranch = core.SourceBranch(m.repoRoot)
-	m.agents = core.ReadAndEnrichAgents(m.repoRoot, indices, m.srcBranch)
+	m.agents = core.ReadAndEnrichAgents(m.repoRoot, indices)
 	if m.cursor >= len(m.agents) {
 		m.cursor = len(m.agents) - 1
 	}
@@ -189,8 +189,9 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		agentIdx := -1
 		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
+		handle := m.actionHandler.Handle
 		return m, func() tea.Msg {
-			return actionResultMsg{result: m.actionHandler.Handle(result, name)}
+			return actionResultMsg{result: handle(result, name)}
 		}
 	case "esc", "ctrl+c":
 		m.mode = modeNormal
@@ -368,8 +369,9 @@ func (m TUIModel) updateConflictTree(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
+	handle := m.actionHandler.Handle
 	return m, func() tea.Msg {
-		return actionResultMsg{result: m.actionHandler.Handle(result, "")}
+		return actionResultMsg{result: handle(result, "")}
 	}
 }
 

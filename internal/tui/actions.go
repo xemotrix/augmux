@@ -254,10 +254,13 @@ func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult
 	agentLabel := fmt.Sprintf("agent %d", idx)
 	var ag *core.Agent
 	if idx >= 0 {
-		agent, err := core.ReadAgent(ah.repoRoot, idx)
-		ag = agent
+		agents := core.ReadAndEnrichAgents(ah.repoRoot, []int{idx})
+		if len(agents) != 1 {
+			core.Fatal("Error reading agent state")
+		}
+		ag = agents[0]
 
-		if err == nil && ag.Description != "" {
+		if ag.Description != "" {
 			agentLabel = fmt.Sprintf("%q", ag.Description)
 		}
 	}

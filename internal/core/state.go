@@ -63,6 +63,25 @@ const (
 	AgentStatusConflict
 )
 
+func (as AgentStatus) String() string {
+	switch as {
+	case AgentStatusNone:
+		return "AgentStatusNone"
+	case AgentStatusWip:
+		return "AgentStatusWip"
+	case AgentStatusMerged:
+		return "AgentStatusMerged"
+	case AgentStatusIdle:
+		return "AgentStatusIdle"
+	case AgentStatusWorking:
+		return "AgentStatusWorking"
+	case AgentStatusConflict:
+		return "AgentStatusConflict"
+	default:
+		panic("Invalid status")
+	}
+}
+
 func (a *Agent) Status() AgentStatus {
 	if a == nil {
 		return AgentStatusNone
@@ -76,7 +95,7 @@ func (a *Agent) Status() AgentStatus {
 	if a.Activity == ActivityWorking {
 		return AgentStatusWorking
 	}
-	if a.Activity == ActivityIdle {
+	if a.Activity == ActivityIdle && a.CommitsAhead == 0 {
 		return AgentStatusIdle
 	}
 	return AgentStatusWip
@@ -202,7 +221,8 @@ func ReadAgent(repoRoot string, idx int) (*Agent, error) {
 // EnrichAgent populates derived fields (CommitsAhead, UncommittedCount,
 // HasConflicts) that require git operations. Call once per refresh cycle
 // rather than recomputing in every consumer.
-func EnrichAgent(repoRoot, srcBranch string, a *Agent) {
+func EnrichAgent(repoRoot string, a *Agent) {
+	srcBranch := SourceBranch(repoRoot)
 	if a.Branch != "" && srcBranch != "" {
 		ahead, err := Git(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 		if err == nil {
@@ -263,7 +283,7 @@ func detectActivity(window string) string {
 
 // ReadAndEnrichAgents reads and enriches all agents in parallel.
 // Each agent's ReadAgent + EnrichAgent runs in its own goroutine.
-func ReadAndEnrichAgents(repoRoot string, indices []int, srcBranch string) []*Agent {
+func ReadAndEnrichAgents(repoRoot string, indices []int) []*Agent {
 	results := make([]*Agent, len(indices))
 	var wg sync.WaitGroup
 	for i, idx := range indices {
@@ -274,7 +294,7 @@ func ReadAndEnrichAgents(repoRoot string, indices []int, srcBranch string) []*Ag
 			if err != nil {
 				return
 			}
-			EnrichAgent(repoRoot, srcBranch, a)
+			EnrichAgent(repoRoot, a)
 			results[i] = a
 		}(i, idx)
 	}
