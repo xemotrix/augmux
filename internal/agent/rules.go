@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -129,48 +128,4 @@ func (a *AgentDef) SpawnCmdWithRules(rulesFile string) string {
 	return a.Command
 }
 
-// RebasePaneCmd returns the shell command to run a non-interactive agent
-// instance that performs only the rebase operation. The prompt is passed as a
-// CLI argument so no send-keys interaction is needed.
-func (a *AgentDef) RebasePaneCmd(prompt, rulesFile string) string {
-	return a.oneOffPaneCmd(prompt, rulesFile)
-}
-
-// RebaseExecCmd returns an *exec.Cmd for running a headless agent instance
-// that performs the rebase operation. The caller is responsible for starting it.
-func (a *AgentDef) RebaseExecCmd(prompt, rulesFile, worktree string) *exec.Cmd {
-	var args []string
-	switch a.ID {
-	case "auggie":
-		if rulesFile != "" {
-			args = []string{"--rules", rulesFile, prompt}
-		} else {
-			args = []string{prompt}
-		}
-	case "cursor":
-		args = []string{"--yolo", "--print", "--trust", "--workspace", worktree, prompt}
-	default:
-		args = []string{prompt}
-	}
-	cmd := exec.Command(a.Command, args...)
-	cmd.Dir = worktree
-	return cmd
-}
-
-// oneOffPaneCmd builds the shell command for a one-shot agent invocation
-// in a split pane (used by both rebase and squash).
-func (a *AgentDef) oneOffPaneCmd(prompt, rulesFile string) string {
-	escaped := strings.ReplaceAll(prompt, "'", "'\\''")
-	switch a.ID {
-	case "auggie":
-		if rulesFile != "" {
-			return fmt.Sprintf("%s --rules '%s' '%s'", a.Command, rulesFile, escaped)
-		}
-		return fmt.Sprintf("%s '%s'", a.Command, escaped)
-	case "cursor":
-		return fmt.Sprintf("%s --yolo --print '%s'", a.Command, escaped)
-	default:
-		return fmt.Sprintf("%s '%s'", a.Command, escaped)
-	}
-}
 

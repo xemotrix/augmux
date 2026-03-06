@@ -11,7 +11,7 @@ import (
 
 func RunAgentCard(
 	a *core.AgentState,
-	repoRoot, srcBranch, spinnerFrame, rebaseSpinnerFrame string,
+	repoRoot, srcBranch, spinnerFrame string,
 	selected ...bool,
 ) string {
 	sel := len(selected) > 0 && selected[0]
@@ -62,7 +62,7 @@ func RunAgentCard(
 		Padding(0, 1)
 
 	// Row 1: description (left-aligned) + activity indicator (right-aligned)
-	activityStr := activityIndicator(a, spinnerFrame, rebaseSpinnerFrame)
+	activityStr := activityIndicator(a, spinnerFrame)
 	activityWidth := lipgloss.Width(activityRawStr(a))
 	maxName := max(textWidth-activityWidth-1, 10)
 	nameLeft := lipgloss.NewStyle().
@@ -90,10 +90,7 @@ func RunAgentCard(
 	return lipgloss.JoinVertical(lipgloss.Left, topLine, bodyStyle.Render(body))
 }
 
-func activityIndicator(a *core.AgentState, spinnerFrame, rebaseSpinnerFrame string) string {
-	if a.Rebasing {
-		return lipgloss.NewStyle().Foreground(styles.ColorPurple).Render(rebaseSpinnerFrame + " rebasing")
-	}
+func activityIndicator(a *core.AgentState, spinnerFrame string) string {
 	if a.Activity == core.ActivityWorking {
 		return lipgloss.NewStyle().Foreground(styles.ColorYellow).Render(spinnerFrame + " working")
 	}
@@ -101,9 +98,6 @@ func activityIndicator(a *core.AgentState, spinnerFrame, rebaseSpinnerFrame stri
 }
 
 func activityRawStr(a *core.AgentState) string {
-	if a.Rebasing {
-		return "⠋ rebasing"
-	}
 	if a.Activity == core.ActivityWorking {
 		return "⠋ working"
 	}
@@ -111,9 +105,6 @@ func activityRawStr(a *core.AgentState) string {
 }
 
 func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalColor {
-	if a.Rebasing {
-		return styles.ColorPurple
-	}
 	if a.MergeCommit != "" {
 		return styles.ColorCyan
 	}
@@ -133,9 +124,6 @@ func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalCol
 }
 
 func AgentStatusRaw(a *core.AgentState) string {
-	if a.Rebasing {
-		return "● rebasing"
-	}
 	if a.MergeCommit != "" {
 		return "● merged"
 	}
@@ -149,9 +137,6 @@ func AgentStatusRaw(a *core.AgentState) string {
 }
 
 func AgentStatusStyled(a *core.AgentState, text string) string {
-	if a.Rebasing {
-		return styles.BadgeRebasing.Render(text)
-	}
 	if a.MergeCommit != "" {
 		return styles.BadgeMerged.Render(text)
 	}

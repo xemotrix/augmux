@@ -48,8 +48,7 @@ type AgentState struct {
 	Resolving    string
 	Activity     string // "idle" or "working"
 	Window       string // tmux window name (e.g. "ax-1-fix-auth")
-	HasConflicts bool   // true if merging this branch would produce conflicts
-	Rebasing     bool   // true while a headless rebase subprocess is running (set in-memory by TUI)
+	HasConflicts bool // true if merging this branch would produce conflicts
 }
 
 // DetectConflicts checks whether merging agentBranch into srcBranch would
