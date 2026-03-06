@@ -480,14 +480,27 @@ func (m TUIModel) View() string {
 	}
 
 	if m.mode == modeSpawning {
-		spawnTitle := styles.TitleStyle.Render("Task name for new agent:")
-		inputLine := lipgloss.NewStyle().Render(m.textInput.View())
-		ruleLine := styles.HintStyle.Render("rule: agent will commit after every prompt")
-		if !m.commitRule {
-			ruleLine = styles.HintStyle.Render("rule: agent won't commit after every prompt")
+		spawnTitle := styles.AccentStyle.Render("Task name for new agent:")
+		autoCommit := styles.DisabledStyle.Render("off")
+		if m.commitRule {
+			autoCommit = styles.EnabledStyle.Render("on")
 		}
-		hint := styles.HintStyle.Render("enter confirm · esc cancel · tab toggle commit rule")
-		sections = append(sections, spawnTitle, "", inputLine, "", ruleLine, hint, "")
+		autoCommitLine := lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			styles.DefaultStyle.Render("auto-commit: "),
+			autoCommit,
+		)
+		inputLine := lipgloss.NewStyle().Render(m.textInput.View())
+		hint := lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			styles.AccentStyle.Render("enter"),
+			styles.DefaultStyle.Render(" confirm · "),
+			styles.AccentStyle.Render("esc"),
+			styles.DefaultStyle.Render(" cancel · "),
+			styles.AccentStyle.Render("tab"),
+			styles.DefaultStyle.Render(" toggle commit rule"),
+		)
+		sections = append(sections, spawnTitle, autoCommitLine, "", inputLine, "", hint, "")
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
 
