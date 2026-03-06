@@ -328,6 +328,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	isMerged := sel != nil && sel.MergeCommit != ""
 	isResolving := sel != nil && sel.Resolving != ""
 	isIdle := sel != nil && sel.Activity == core.ActivityIdle
+	isRebasing := sel != nil && sel.Rebasing
 
 	// Check if agent has commits ahead of source branch
 	hasCommits := false
@@ -378,7 +379,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
-		if isWip && hasCommits {
+		if isWip && hasCommits && !isRebasing {
 			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
@@ -446,6 +447,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	isResolving := a != nil && a.Resolving != ""
 	isIdle := a != nil && a.Activity == core.ActivityIdle
 	hasConflicts := a != nil && a.HasConflicts
+	isRebasing := a != nil && a.Rebasing
 
 	hasCommits := false
 	if a != nil && repoRoot != "" {
@@ -461,8 +463,8 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	actions := []action{
 		{"enter:focus", hasAgent},
 		{"spawn", true},
-		{"merge", isWip && hasCommits},
-		{"re|base", isWip && hasConflicts && isIdle},
+		{"merge", isWip && hasCommits && !isRebasing},
+		{"re|base", isWip && hasConflicts && isIdle && !isRebasing},
 		{"x:squash", isWip && hasCommits},
 		{"accept", isMerged},
 		{"reject", isMerged || isResolving},
