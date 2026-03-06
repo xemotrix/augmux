@@ -579,7 +579,7 @@ func (m TUIModel) View() string {
 func RunInteractiveTUI(repoRoot string) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
-			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
+			Frames: []string{"◐", "◓", "◑", "◒"},
 			FPS:    time.Second / 16,
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
