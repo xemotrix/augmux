@@ -202,21 +202,7 @@ func (ah *ActionHandler) confirmCancelRequest(idx int, agentLabel, detail string
 	}
 }
 
-func (ah *ActionHandler) handleCancel(idx int, agentLabel string) ActionResult {
-	if idx == -1 {
-		return ActionDone{}
-	}
-	ag, err := core.ReadAgent(ah.repoRoot, idx)
-	if err != nil {
-		return ActionDone{
-			Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
-			Level: ToastError,
-		}
-	}
-	if ag == nil {
-		return ActionDone{}
-	}
-
+func (ah *ActionHandler) handleCancel(idx int, ag *core.Agent, agentLabel string) ActionResult {
 	if ag.UncommittedCount > 0 || ag.CommitsAhead > 0 {
 		var warnings []string
 		if ag.CommitsAhead > 0 {
@@ -287,7 +273,7 @@ func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult
 	case ActionFocus:
 		return ah.handleFocus(idx)
 	case ActionCancel:
-		return ah.handleCancel(idx, agentLabel)
+		return ah.handleCancel(idx, ag, agentLabel)
 	default:
 		return ActionDone{}
 	}
