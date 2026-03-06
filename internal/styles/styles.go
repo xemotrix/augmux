@@ -10,7 +10,7 @@ var (
 	ColorRed     = lipgloss.Color("#E46876") // waveRed
 	ColorCyan    = lipgloss.Color("#7FB4CA") // springBlue
 	ColorGray    = lipgloss.Color("#727169") // fujiGray
-	ColorDimGray = lipgloss.Color("#54546D") // sumiInk4
+	ColorDimGray = lipgloss.Color("#938AA9") // springViolet1
 	ColorWhite   = lipgloss.Color("#DCD7BA") // fujiWhite
 	ColorPurple  = lipgloss.Color("#957FB8") // oniViolet
 
