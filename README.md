@@ -48,12 +48,7 @@ augmux help    # show help
 
 ## TUI
 
-The dashboard shows a responsive grid of agent cards. Each card displays:
-
-- **Task description** and **activity indicator** (working/idle, detected by monitoring tmux pane output)
-- **Branch name**, **commits ahead** of the source branch, and **uncommitted file count**
-- **Status badge** — `wip`, `merged`, `resolving`, or `conflicts`
-- **Color-coded borders** — green (idle with commits), yellow (working), cyan (merged), red (conflicts/resolving), gray (idle, no commits)
+The dashboard shows a grid of agent cards with task name, branch, activity (working/idle), commits ahead, uncommitted files, and a status badge (`wip` / `merged` / `conflicts`). Borders are color-coded: green = idle with commits, yellow = working, cyan = merged, red = conflicts, gray = idle with no commits.
 
 ### Keybindings
 
@@ -65,6 +60,8 @@ The dashboard shows a responsive grid of agent cards. Each card displays:
 | `a` | **Accept** — confirm a merge and clean up the agent |
 | `r` | **Reject** — undo the merge commit; agent stays alive for fixes |
 | `c` | **Cancel** — discard an agent and all its changes |
+| `b` | **Rebase** — send a rebase command to an agent with conflicts |
+| `=` | **Details** — show a file change tree for the selected agent |
 | `enter` | **Focus** — switch to the agent's tmux window |
 | `q` / `ctrl+c` | Quit the TUI |
 
@@ -72,37 +69,11 @@ Actions are context-sensitive — they only activate when applicable to the sele
 
 ## How It Works
 
-augmux manages a session tied to your current git branch (the "source branch"). When you spawn an agent:
+augmux manages a session tied to your current git branch (the "source branch"). Each spawned agent gets its own branch, git worktree (in `.augmux-worktrees/`), and tmux window with the agent CLI running. A rules file is injected so the agent knows its task and constraints.
 
-1. A new git branch is created from the source branch (e.g. `augmux/fix-auth-1`)
-2. A git worktree is created in `.augmux-worktrees/` pointing to that branch
-3. A rules file with context about the task, branch, and worktree is injected into the agent's session
-4. A new tmux window opens in the worktree directory with the agent CLI running
+**Merge flow** — squash-merge → review → accept/reject. Uncommitted changes in the worktree are auto-committed before merging. Accept tears down the agent; reject undoes the merge commit so the agent can keep working.
 
-Each agent works in complete isolation. When you merge, augmux squash-merges the agent's branch into the source branch. You then review the result and accept or reject it.
-
-### Agent rules injection
-
-augmux injects a rules file into each agent session so the agent knows its task, branch, and constraints (e.g. "don't push to remote"). For Auggie, this is passed via the `--rules` flag. For Cursor, it's written to `.cursor/rules/augmux.mdc` in the agent's worktree.
-
-### Merge flow
-
-Merging uses a two-phase flow: **merge → review → accept/reject**.
-
-- **Merge** squash-merges the agent's branch. If there are uncommitted changes in the worktree, they are auto-committed first.
-- **Accept** confirms the merge and tears down the agent (kills the tmux window, removes the worktree and branch).
-- **Reject** undoes the merge commit. The agent stays alive so you can switch to its window, fix the issue, and merge again.
-
-### Conflict resolution
-
-When a merge has conflicts, the TUI presents two options:
-
-1. **Continue** — conflict markers are left in the working tree for manual resolution
-2. **Abort** — resets the working tree; the agent is preserved for retry
-
-### State
-
-Session state is stored in `.augmux-state/` at the repo root. Each agent has a `task-N/` directory containing its description, branch name, worktree path, window name, and merge status. Both `.augmux-state/` and `.augmux-worktrees/` are gitignored.
+**Conflicts** are detected proactively via `git merge-tree`. When conflicts exist, merge is disabled and the card turns red. Press `b` to send a rebase command to the agent, or `=` to inspect which files conflict.
 
 ## Typical Workflow
 
