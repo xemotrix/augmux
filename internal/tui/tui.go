@@ -180,13 +180,14 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		name := strings.TrimSpace(m.textInput.Value())
-		m.mode = modeNormal
 		if name == "" {
+			m.mode = modeNormal
 			return m, AddToast("Empty name — spawn aborted.", ToastWarning)
 		}
 		if err := validateAgentName(name); err != nil {
 			return m, AddToast("Invalid name: "+err.Error(), ToastWarning)
 		}
+		m.mode = modeNormal
 		agentIdx := -1
 		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
 		handle := m.actionHandler.Handle
