@@ -12,6 +12,7 @@ var (
 	ColorGray    = lipgloss.Color("#727169") // fujiGray
 	ColorDimGray = lipgloss.Color("#54546D") // sumiInk4
 	ColorWhite   = lipgloss.Color("#DCD7BA") // fujiWhite
+	ColorPurple  = lipgloss.Color("#957FB8") // oniViolet
 
 	// Title
 	TitleStyle = lipgloss.NewStyle().
@@ -24,6 +25,7 @@ var (
 	BadgeMerged    = lipgloss.NewStyle().Bold(true).Foreground(ColorCyan)
 	BadgeResolving = lipgloss.NewStyle().Bold(true).Foreground(ColorYellow)
 	BadgeConflicts = lipgloss.NewStyle().Bold(true).Foreground(ColorRed)
+	BadgeRebasing  = lipgloss.NewStyle().Bold(true).Foreground(ColorPurple)
 	// Labels and values
 	LabelStyle  = lipgloss.NewStyle().Foreground(ColorDimGray)
 	ValueStyle  = lipgloss.NewStyle().Foreground(ColorWhite)

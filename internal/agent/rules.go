@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 )
 
@@ -139,6 +140,27 @@ func (a *AgentDef) RebasePaneCmd(prompt, rulesFile string) string {
 // instance that performs the squash operation.
 func (a *AgentDef) SquashPaneCmd(prompt, rulesFile string) string {
 	return a.oneOffPaneCmd(prompt, rulesFile)
+}
+
+// RebaseExecCmd returns an *exec.Cmd for running a headless agent instance
+// that performs the rebase operation. The caller is responsible for starting it.
+func (a *AgentDef) RebaseExecCmd(prompt, rulesFile, worktree string) *exec.Cmd {
+	var args []string
+	switch a.ID {
+	case "auggie":
+		if rulesFile != "" {
+			args = []string{"--rules", rulesFile, prompt}
+		} else {
+			args = []string{prompt}
+		}
+	case "cursor":
+		args = []string{"--yolo", "--print", "--trust", "--workspace", worktree, prompt}
+	default:
+		args = []string{prompt}
+	}
+	cmd := exec.Command(a.Command, args...)
+	cmd.Dir = worktree
+	return cmd
 }
 
 // oneOffPaneCmd builds the shell command for a one-shot agent invocation

@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 	"unicode"
@@ -27,7 +28,6 @@ const (
 	ActionReject
 	ActionCancel
 	ActionFocus
-	ActionRebase
 	ActionSquash
 )
 
@@ -87,6 +87,7 @@ type TUIModel struct {
 	quitting      bool
 	mode          tuiMode
 	spinner       spinner.Model
+	rebaseSpinner spinner.Model
 	textInput     textinput.Model                      // for spawn
 	toaster       toaster                              // toast notifications
 	actionHandler func(TUIResult, string) ActionResult // returns action result
@@ -94,9 +95,12 @@ type TUIModel struct {
 	menuOptions   []string                             // inline menu options
 	menuCursor    int                                  // inline menu cursor
 	menuCallback  func(int) ActionResult               // inline menu callback
+
+	rebasingAgentIdx int // agent index being rebased, -1 = none
 }
 
 type tickMsg time.Time
+type rebaseDoneMsg struct{ err error }
 
 func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -114,6 +118,9 @@ func (m *TUIModel) refreshAgents() {
 		// Proactively detect merge conflicts for WIP agents.
 		if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
 			a.HasConflicts = core.DetectConflicts(m.repoRoot, srcBranch, a.Branch)
+		}
+		if m.rebasingAgentIdx == a.Index {
+			a.Rebasing = true
 		}
 		m.agents = append(m.agents, a)
 	}
@@ -139,7 +146,7 @@ type actionResultMsg struct {
 }
 
 func (m TUIModel) Init() tea.Cmd {
-	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick)
+	return tea.Batch(tickEvery(500*time.Millisecond), m.spinner.Tick, m.rebaseSpinner.Tick)
 }
 
 func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -154,14 +161,23 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickEvery(500 * time.Millisecond)
 
 	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		var cmd1, cmd2 tea.Cmd
+		m.spinner, cmd1 = m.spinner.Update(msg)
+		m.rebaseSpinner, cmd2 = m.rebaseSpinner.Update(msg)
+		return m, tea.Batch(cmd1, cmd2)
 
 	case addToastMsg, toastExpiredMsg:
 		var cmd tea.Cmd
 		m.toaster, cmd = m.toaster.Update(msg)
 		return m, cmd
+
+	case rebaseDoneMsg:
+		m.rebasingAgentIdx = -1
+		m.refreshAgents()
+		if msg.err != nil {
+			return m, AddToast(fmt.Sprintf("Rebase failed: %s", msg.err), ToastError)
+		}
+		return m, AddToast("Rebase completed", ToastSuccess)
 
 	case actionResultMsg:
 		switch v := msg.result.(type) {
@@ -378,8 +394,12 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
 	case "b":
-		if isWip && sel.HasConflicts && isIdle {
-			return m.runInlineAction(ActionRebase, agentIdx)
+		if isWip && sel.HasConflicts && isIdle && m.rebasingAgentIdx < 0 {
+			m.rebasingAgentIdx = agentIdx
+			repoRoot := m.repoRoot
+			return m, func() tea.Msg {
+				return startRebase(repoRoot, agentIdx)
+			}
 		}
 	case "x":
 		if isWip && hasCommits {
@@ -391,6 +411,17 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// startRebase runs the headless agent subprocess and waits for it to finish.
+func startRebase(repoRoot string, agentIdx int) tea.Msg {
+	cmd, err := ops.RebaseCmd(repoRoot, agentIdx)
+	if err != nil {
+		return rebaseDoneMsg{err: err}
+	}
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	return rebaseDoneMsg{err: cmd.Run()}
 }
 
 // runInlineAction runs an action in a goroutine. The handler may return
@@ -535,9 +566,10 @@ func (m TUIModel) View() string {
 		sections = append(sections, styles.LabelStyle.Render("No agents running."))
 	} else {
 		spinnerFrame := m.spinner.View()
+		rebaseSpinnerFrame := m.rebaseSpinner.View()
 		var cards []string
 		for i, a := range m.agents {
-			cards = append(cards, RunAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
+			cards = append(cards, RunAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, rebaseSpinnerFrame, i == m.cursor))
 		}
 
 		cols := m.cols()
@@ -605,12 +637,21 @@ func RunInteractiveTUI(
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
 	)
+	rs := spinner.New(
+		spinner.WithSpinner(spinner.Spinner{
+			Frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+			FPS:    time.Second / 8,
+		}),
+		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorPurple)),
+	)
 	m := TUIModel{
-		repoRoot:      repoRoot,
-		width:         100,
-		spinner:       s,
-		toaster:       newToaster(),
-		actionHandler: tuiActionHandler(repoRoot),
+		repoRoot:         repoRoot,
+		width:            100,
+		spinner:          s,
+		rebaseSpinner:    rs,
+		toaster:          newToaster(),
+		actionHandler:    tuiActionHandler(repoRoot),
+		rebasingAgentIdx: -1,
 	}
 	if !agent.IsConfigured() {
 		defs := agent.KnownAgentDefs()
@@ -778,20 +819,6 @@ func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
 				ops.CancelOne(&sink, repoRoot, idx)
 				return ActionDone{
 					Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionRebase:
-			if idx >= 0 {
-				if err := ops.SendRebase(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Rebase send failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
 					Level: ToastSuccess,
 				}
 			}
