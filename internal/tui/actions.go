@@ -257,7 +257,10 @@ func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult
 	if idx >= 0 {
 		agents := core.ReadAndEnrichAgents(ah.repoRoot, []int{idx})
 		if len(agents) != 1 {
-			core.Fatal("Error reading agent state")
+			return ActionDone{
+				Lines: []string{fmt.Sprintf("Agent %d no longer exists", idx)},
+				Level: ToastWarning,
+			}
 		}
 		ag = agents[0]
 
