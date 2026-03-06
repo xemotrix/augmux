@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// RulesTemplate is the system prompt injected into auggie sessions spawned by augmux.
-// Placeholders: {{TASK}}, {{BRANCH}}, {{WORKTREE}}, {{SOURCE_BRANCH}}
+// RulesTemplate is the system prompt injected into agent sessions spawned by augmux.
+// Placeholders: {{TASK}}, {{BRANCH}}, {{WORKTREE}}, {{SOURCE_BRANCH}}, {{COMMIT_INSTRUCTION}}
 const RulesTemplate = `# augmux agent rules
 
 You are running inside **augmux**, a tool that orchestrates multiple AI coding agents
@@ -22,19 +22,24 @@ in parallel using tmux windows and git worktrees.
 
 ## Important instructions
 
-- When you finish your task, **commit your changes** with a clear commit message unless the user tells you otherwise.
+{{COMMIT_INSTRUCTION}}
 - Do **NOT** push to any remote.
 - Do **NOT** switch branches or leave the worktree directory.
 - Focus exclusively on the task you have been given.
 `
 
 // BuildRules renders the rules template with the given values.
-func BuildRules(task, branch, worktree, sourceBranch string) string {
+func BuildRules(task, branch, worktree, sourceBranch string, commitRule bool) string {
+	commitInstruction := "- When you finish your task, **commit your changes** with a clear commit message unless the user tells you otherwise."
+	if !commitRule {
+		commitInstruction = "- Do **NOT** commit any changes — the user will control commits manually."
+	}
 	r := strings.NewReplacer(
 		"{{TASK}}", task,
 		"{{BRANCH}}", branch,
 		"{{WORKTREE}}", worktree,
 		"{{SOURCE_BRANCH}}", sourceBranch,
+		"{{COMMIT_INSTRUCTION}}", commitInstruction,
 	)
 	return r.Replace(RulesTemplate)
 }

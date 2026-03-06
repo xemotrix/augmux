@@ -29,7 +29,7 @@ func ensureSession(repoRoot string) error {
 	return nil
 }
 
-func spawn(repoRoot, name string, ag *agentcli.AgentCliDef) error {
+func spawn(repoRoot, name string, ag *agentcli.AgentCliDef, commitRule bool) error {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -53,7 +53,7 @@ func spawn(repoRoot, name string, ag *agentcli.AgentCliDef) error {
 	}
 
 	rulesFile := filepath.Join(td, "rules.md")
-	rulesContent := agentcli.BuildRules(name, branchName, wtPath, srcBranch)
+	rulesContent := agentcli.BuildRules(name, branchName, wtPath, srcBranch, commitRule)
 	core.WriteFileContent(rulesFile, rulesContent)
 
 	if ag.ID == "cursor" {
@@ -113,7 +113,7 @@ func appendToGitignore(path, entry string) {
 }
 
 // SpawnByName spawns a single agent with the given name.
-func SpawnByName(repoRoot string, name string) error {
+func SpawnByName(repoRoot string, name string, commitRule bool) error {
 	var err error
 	repoRoot, err = core.Abs(repoRoot)
 	if err != nil {
@@ -126,5 +126,5 @@ func SpawnByName(repoRoot string, name string) error {
 	if err != nil {
 		return err
 	}
-	return spawn(repoRoot, name, ag)
+	return spawn(repoRoot, name, ag, commitRule)
 }

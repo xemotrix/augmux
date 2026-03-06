@@ -27,8 +27,9 @@ const (
 
 // TUIResult holds the result of an interactive TUI session.
 type TUIResult struct {
-	Action   TUIAction
-	AgentIdx int // selected agent index, or -1 if none
+	Action     TUIAction
+	AgentIdx   int  // selected agent index, or -1 if none
+	CommitRule bool // when true, agent rules instruct committing after changes
 }
 
 // ActionResult is returned by TUI action handlers. Implementations are
@@ -97,8 +98,8 @@ func (ah *ActionHandler) handleMerge(idx int, agentLabel string) ActionResult {
 	}
 }
 
-func (ah *ActionHandler) handleSpawn(spawnName string) ActionResult {
-	if err := ops.SpawnByName(ah.repoRoot, spawnName); err != nil {
+func (ah *ActionHandler) handleSpawn(spawnName string, commitRule bool) ActionResult {
+	if err := ops.SpawnByName(ah.repoRoot, spawnName, commitRule); err != nil {
 		return ActionDone{
 			Lines: []string{fmt.Sprintf("Spawn failed: %s", err)},
 			Level: ToastError,
@@ -273,7 +274,7 @@ func (ah *ActionHandler) Handle(result TUIResult, spawnName string) ActionResult
 	case ActionMerge:
 		return ah.handleMerge(idx, agentLabel)
 	case ActionSpawn:
-		return ah.handleSpawn(spawnName)
+		return ah.handleSpawn(spawnName, result.CommitRule)
 	case ActionAccept:
 		return ah.handleAccept(idx, agentLabel)
 	case ActionReject:

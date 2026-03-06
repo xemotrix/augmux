@@ -54,6 +54,7 @@ type TUIModel struct {
 	agentCard     AgentCard
 
 	conflictTree *conflictTreeState // non-nil when viewing conflict tree
+	commitRule   bool               // spawn-time toggle: agent commits after changes
 }
 
 type (
@@ -189,11 +190,14 @@ func (m TUIModel) updateSpawning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = modeNormal
 		agentIdx := -1
-		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx}
+		result := TUIResult{Action: ActionSpawn, AgentIdx: agentIdx, CommitRule: m.commitRule}
 		handle := m.actionHandler.Handle
 		return m, func() tea.Msg {
 			return actionResultMsg{result: handle(result, name)}
 		}
+	case "tab":
+		m.commitRule = !m.commitRule
+		return m, nil
 	case "esc", "ctrl+c":
 		m.mode = modeNormal
 		return m, AddToast("Spawn cancelled.", ToastInfo)
@@ -318,6 +322,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "s":
 		m.textInput = newSpawnTextInput()
+		m.commitRule = true
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
@@ -477,8 +482,12 @@ func (m TUIModel) View() string {
 	if m.mode == modeSpawning {
 		spawnTitle := styles.TitleStyle.Render("Task name for new agent:")
 		inputLine := lipgloss.NewStyle().Render(m.textInput.View())
-		hint := styles.HintStyle.Render("enter confirm · esc cancel")
-		sections = append(sections, spawnTitle, "", inputLine, "", hint, "")
+		ruleLine := styles.HintStyle.Render("rule: agent will commit after every prompt")
+		if !m.commitRule {
+			ruleLine = styles.HintStyle.Render("rule: agent won't commit after every prompt")
+		}
+		hint := styles.HintStyle.Render("enter confirm · esc cancel · tab toggle commit rule")
+		sections = append(sections, spawnTitle, "", inputLine, "", ruleLine, hint, "")
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
 
