@@ -40,15 +40,17 @@ var (
 
 // AgentState holds the state for a single agent.
 type AgentState struct {
-	Index        int
-	Description  string
-	Branch       string
-	Worktree     string
-	MergeCommit  string
-	Resolving    string
-	Activity     string // "idle" or "working"
-	Window       string // tmux window name (e.g. "ax-1-fix-auth")
-	HasConflicts bool // true if merging this branch would produce conflicts
+	Index            int
+	Description      string
+	Branch           string
+	Worktree         string
+	MergeCommit      string
+	Resolving        string
+	Activity         string // "idle" or "working"
+	Window           string // tmux window name (e.g. "ax-1-fix-auth")
+	HasConflicts     bool   // true if merging this branch would produce conflicts
+	CommitsAhead     int    // commits ahead of source branch
+	UncommittedCount int    // number of uncommitted files in worktree
 }
 
 // DetectConflicts checks whether merging agentBranch into srcBranch would
@@ -121,6 +123,29 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 		Activity:    activity,
 		Window:      window,
 	}, nil
+}
+
+// EnrichAgent populates derived fields (CommitsAhead, UncommittedCount,
+// HasConflicts) that require git operations. Call once per refresh cycle
+// rather than recomputing in every consumer.
+func EnrichAgent(repoRoot, srcBranch string, a *AgentState) {
+	if a.Branch != "" && srcBranch != "" {
+		ahead, err := Git(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
+		if err == nil {
+			fmt.Sscanf(ahead, "%d", &a.CommitsAhead)
+		}
+	}
+
+	if IsDir(a.Worktree) {
+		status, _ := Git(a.Worktree, "status", "--porcelain")
+		if status != "" {
+			a.UncommittedCount = len(strings.Split(status, "\n"))
+		}
+	}
+
+	if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
+		a.HasConflicts = DetectConflicts(repoRoot, srcBranch, a.Branch)
+	}
 }
 
 // capturePaneHash captures the tmux pane content and returns a hex-encoded

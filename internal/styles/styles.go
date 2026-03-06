@@ -1,7 +1,5 @@
 package styles
 
-// conflict 111
-
 import "github.com/charmbracelet/lipgloss"
 
 var (

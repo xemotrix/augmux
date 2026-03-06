@@ -2,15 +2,14 @@ package ops
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-// MergeConflictErr is returned by MergeOne in MergeTUI mode when conflicts
-// are detected. The working tree is left in the conflicted state so the
-// caller can resolve or abort.
+// MergeConflictErr is returned by MergeOne when conflicts are detected.
+// The working tree is left in the conflicted state so the caller can
+// resolve or abort.
 type MergeConflictErr struct {
 	RepoRoot  string
 	AgentIdx  int
@@ -23,8 +22,12 @@ func (e *MergeConflictErr) Error() string {
 	return "merge conflicts detected"
 }
 
-func MergeOne(w io.Writer, repoRoot string, idx int) error {
-	repoRoot = core.MustAbs(repoRoot)
+func MergeOne(repoRoot string, idx int) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	td := core.TaskDir(repoRoot, idx)
 
 	ag, err := core.ReadAgent(repoRoot, idx)
@@ -41,32 +44,47 @@ func MergeOne(w io.Writer, repoRoot string, idx int) error {
 
 	// Check resolving state (user came back after fixing conflicts)
 	if ag.Resolving != "" {
-		unmerged := core.GitMust(repoRoot, "diff", "--name-only", "--diff-filter=U")
-		porcelain := core.GitMust(repoRoot, "status", "--porcelain")
+		unmerged, _ := core.Git(repoRoot, "diff", "--name-only", "--diff-filter=U")
+		porcelain, _ := core.Git(repoRoot, "status", "--porcelain")
 		if unmerged != "" || porcelain != "" {
 			return fmt.Errorf("still resolving")
 		}
-		sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
+		sha, err := core.Git(repoRoot, "rev-parse", "HEAD")
+		if err != nil {
+			return fmt.Errorf("failed to get HEAD sha: %w", err)
+		}
 		core.WriteFileContent(td+"/merge_commit", sha)
 		os.Remove(td + "/resolving")
 		return nil
 	}
 
+	// Ensure the main repo working tree is clean before we touch it.
+	mainStatus, _ := core.Git(repoRoot, "status", "--porcelain")
+	if mainStatus != "" {
+		return fmt.Errorf("main repo has uncommitted changes; commit or stash before merging")
+	}
+
 	// Auto-commit uncommitted changes in worktree
 	if core.IsDir(ag.Worktree) {
-		porcelain := core.GitMust(ag.Worktree, "status", "--porcelain")
+		porcelain, _ := core.Git(ag.Worktree, "status", "--porcelain")
 		if porcelain != "" {
-			core.GitMust(ag.Worktree, "add", "-A")
-			core.GitMust(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes")
+			if _, err := core.Git(ag.Worktree, "add", "-A"); err != nil {
+				return fmt.Errorf("failed to stage changes in worktree: %w", err)
+			}
+			if _, err := core.Git(ag.Worktree, "commit", "-m", "augmux: auto-commit uncommitted changes"); err != nil {
+				return fmt.Errorf("failed to auto-commit in worktree: %w", err)
+			}
 		}
 	}
 
 	// Checkout source branch
-	core.Git(repoRoot, "checkout", srcBranch)
+	if _, err := core.Git(repoRoot, "checkout", srcBranch); err != nil {
+		return fmt.Errorf("failed to checkout %s: %w", srcBranch, err)
+	}
 
 	// Count ahead
-	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
-	if ahead == "0" || ahead == "" {
+	ahead, err := core.Git(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
+	if err != nil || ahead == "0" || ahead == "" {
 		teardownOne(repoRoot, idx)
 		return nil
 	}
@@ -79,7 +97,10 @@ func MergeOne(w io.Writer, repoRoot string, idx int) error {
 	_, mergeErr := core.Git(repoRoot, "merge", "--squash", ag.Branch)
 	if mergeErr == nil {
 		if _, commitErr := core.Git(repoRoot, "commit", "-m", mergeMsg); commitErr == nil {
-			sha := core.GitMust(repoRoot, "rev-parse", "HEAD")
+			sha, err := core.Git(repoRoot, "rev-parse", "HEAD")
+			if err != nil {
+				return fmt.Errorf("merge succeeded but failed to record commit sha: %w", err)
+			}
 			core.WriteFileContent(td+"/merge_commit", sha)
 			return nil
 		}

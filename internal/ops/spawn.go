@@ -2,7 +2,6 @@ package ops
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,10 @@ func ensureSession(repoRoot string) error {
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("not inside a tmux session. Run this from within tmux")
 	}
-	branch := core.GitMust(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
+	branch, err := core.Git(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to determine current branch: %w", err)
+	}
 	os.MkdirAll(sd, 0o755)
 	os.MkdirAll(core.WorktreeBase(repoRoot), 0o755)
 	core.WriteFileContent(filepath.Join(sd, "source_branch"), branch)
@@ -27,7 +29,7 @@ func ensureSession(repoRoot string) error {
 	return nil
 }
 
-func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
+func spawnOne(repoRoot, name string, ag *agent.AgentDef) error {
 	sd := core.StateDir(repoRoot)
 	srcBranch := core.SourceBranch(repoRoot)
 	idx := core.NextAgentIdx(repoRoot)
@@ -43,17 +45,17 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 	core.WriteFileContent(filepath.Join(td, "worktree"), wtPath)
 
 	core.GitMust(repoRoot, "worktree", "prune")
-	core.GitMust(repoRoot, "branch", branchName, srcBranch)
+	if _, err := core.Git(repoRoot, "branch", branchName, srcBranch); err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	}
 	if _, err := core.Git(repoRoot, "worktree", "add", wtPath, branchName); err != nil {
-		core.Fatal("failed to create worktree: %v", err)
+		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
-	// Write rules file for agents that support it.
 	rulesFile := filepath.Join(td, "rules.md")
 	rulesContent := agent.BuildRules(name, branchName, wtPath, srcBranch)
 	core.WriteFileContent(rulesFile, rulesContent)
 
-	// For Cursor, inject rules and commands via .cursor/ in the worktree.
 	if ag.ID == "cursor" {
 		srcCursor := filepath.Join(repoRoot, ".cursor")
 		if core.IsDir(srcCursor) {
@@ -87,6 +89,7 @@ func spawnOne(w io.Writer, repoRoot, name string, ag *agent.AgentDef) {
 		`run-shell 'tmux send-keys -t "#{pane_id}" "cd \"#{@augmux_worktree}\" && clear" Enter'`)
 
 	core.TmuxRun("send-keys", "-t", winName, ag.SpawnCmdWithRules(rulesFile), "Enter")
+	return nil
 }
 
 // appendToGitignore adds an entry to a .gitignore file if it's not already present.
@@ -110,11 +113,18 @@ func appendToGitignore(path, entry string) {
 }
 
 // SpawnByName spawns a single agent with the given name.
-func SpawnByName(w io.Writer, repoRoot string, name string) {
-	repoRoot = core.MustAbs(repoRoot)
-	if err := ensureSession(repoRoot); err != nil {
-		core.Fatal(err.Error())
+func SpawnByName(repoRoot string, name string) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
 	}
-	ag := agent.ActiveAgent()
-	spawnOne(w, repoRoot, name, ag)
+	if err := ensureSession(repoRoot); err != nil {
+		return err
+	}
+	ag, err := agent.ActiveAgent()
+	if err != nil {
+		return err
+	}
+	return spawnOne(repoRoot, name, ag)
 }

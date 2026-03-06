@@ -1,7 +1,5 @@
 package main
 
-// conflict 1132
-
 import (
 	"fmt"
 	"os"
@@ -39,7 +37,9 @@ func cmdNuke() {
 	if !tui.RunConfirm(msg) {
 		return
 	}
-	ops.TeardownAll(os.Stdout, repoRoot)
+	if err := ops.TeardownAll(repoRoot); err != nil {
+		core.Fatal(err.Error())
+	}
 }
 
 func cmdTUI() {

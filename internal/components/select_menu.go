@@ -1,9 +1,11 @@
 package components
 
 import (
+	"fmt"
+	"os"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/xemotrix/augmux/internal/core"
 	"github.com/xemotrix/augmux/internal/styles"
 )
 
@@ -82,7 +84,8 @@ func RunSelectMenu(title string, options []string) int {
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
-		core.Fatal("TUI error: %v", err)
+		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		return -1
 	}
 	return final.(selectMenuModel).chosen
 }

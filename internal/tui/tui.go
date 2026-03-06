@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -13,60 +13,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/xemotrix/augmux/internal/agent"
 	"github.com/xemotrix/augmux/internal/core"
-	"github.com/xemotrix/augmux/internal/ops"
 	"github.com/xemotrix/augmux/internal/styles"
 )
-
-// TUIAction represents an action the user triggered from the interactive TUI.
-type TUIAction int
-
-const (
-	ActionSpawn TUIAction = iota
-	ActionMerge
-	ActionAccept
-	ActionReject
-	ActionCancel
-	ActionFocus
-	ActionRebase
-)
-
-// TUIResult holds the result of an interactive TUI session.
-type TUIResult struct {
-	Action   TUIAction
-	AgentIdx int // selected agent index, or -1 if none
-}
-
-// ActionResult is returned by TUI action handlers. Implementations are
-// ActionDone (simple output) and MenuRequest (inline menu needed).
-type ActionResult interface {
-	isActionResult()
-}
-
-// ActionDone signals that the action completed. Lines are shown as status.
-type ActionDone struct {
-	Lines []string
-	Level ToastLevel
-}
-
-func (ActionDone) isActionResult() {}
-
-// MenuRequest signals that the action needs user input via an inline menu.
-type MenuRequest struct {
-	Title    string
-	Options  []string
-	Lines    []string                      // status lines shown above the menu
-	Callback func(choice int) ActionResult // called with selected index (-1 = cancelled)
-}
-
-func (MenuRequest) isActionResult() {}
 
 const (
 	cardWidth = 42
 	cardInner = cardWidth - 2 // minus border (2); lipgloss Width includes padding
 	textWidth = cardInner - 2 // minus padding (2); actual chars per line
 )
-
-// Interactive TUI mode
 
 type tuiMode int
 
@@ -114,10 +68,7 @@ func (m *TUIModel) refreshAgents() {
 		if err != nil {
 			continue
 		}
-		// Proactively detect merge conflicts for WIP agents.
-		if a.MergeCommit == "" && a.Resolving == "" && a.Branch != "" {
-			a.HasConflicts = core.DetectConflicts(m.repoRoot, srcBranch, a.Branch)
-		}
+		core.EnrichAgent(m.repoRoot, srcBranch, a)
 		m.agents = append(m.agents, a)
 	}
 	if m.cursor >= len(m.agents) {
@@ -134,11 +85,6 @@ func (m TUIModel) cols() int {
 		cols = len(m.agents)
 	}
 	return cols
-}
-
-// actionResultMsg wraps an ActionResult returned by the action handler.
-type actionResultMsg struct {
-	result ActionResult
 }
 
 func (m TUIModel) Init() tea.Cmd {
@@ -174,7 +120,6 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, AddToast("No changed files found", ToastWarning)
 		}
 		return m, nil
-
 
 	case actionResultMsg:
 		switch v := msg.result.(type) {
@@ -215,7 +160,6 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Forward to text input if in spawning mode
 	if m.mode == modeSpawning {
 		var cmd tea.Cmd
 		m.textInput, cmd = m.textInput.Update(msg)
@@ -318,7 +262,6 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.agents)
 	cols := m.cols()
 
-	// Resolve selected agent for action guards
 	var sel *core.AgentState
 	if m.cursor >= 0 && m.cursor < n {
 		sel = m.agents[m.cursor]
@@ -327,16 +270,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	isMerged := sel != nil && sel.MergeCommit != ""
 	isResolving := sel != nil && sel.Resolving != ""
 	isIdle := sel != nil && sel.Activity == core.ActivityIdle
-
-	// Check if agent has commits ahead of source branch
-	hasCommits := false
-	if sel != nil {
-		srcBranch := core.SourceBranch(m.repoRoot)
-		ahead := core.GitMust(m.repoRoot, "rev-list", "--count", srcBranch+".."+sel.Branch)
-		aheadNum := 0
-		fmt.Sscanf(ahead, "%d", &aheadNum)
-		hasCommits = aheadNum > 0
-	}
+	hasCommits := sel != nil && sel.CommitsAhead > 0
 
 	agentIdx := -1
 	if sel != nil {
@@ -363,7 +297,6 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor+cols < n {
 			m.cursor += cols
 		}
-	// Action keys
 	case "s":
 		ti := textinput.New()
 		ti.Placeholder = "e.g. fix auth bug"
@@ -436,9 +369,6 @@ func (m TUIModel) updateConflictTree(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-
-// runInlineAction runs an action in a goroutine. The handler may return
-// ActionDone (status lines) or MenuRequest (inline menu).
 func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, tea.Cmd) {
 	result := TUIResult{Action: action, AgentIdx: agentIdx}
 	handler := m.actionHandler
@@ -448,7 +378,7 @@ func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, te
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
-func renderActionBar(a *core.AgentState, repoRoot string) string {
+func renderActionBar(a *core.AgentState) string {
 	type action struct {
 		name    string
 		enabled bool
@@ -459,16 +389,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 	isResolving := a != nil && a.Resolving != ""
 	isIdle := a != nil && a.Activity == core.ActivityIdle
 	hasConflicts := a != nil && a.HasConflicts
-
-	hasCommits := false
-	if a != nil && repoRoot != "" {
-		srcBranch := core.SourceBranch(repoRoot)
-		ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
-		aheadNum := 0
-		fmt.Sscanf(ahead, "%d", &aheadNum)
-		hasCommits = aheadNum > 0
-	}
-
+	hasCommits := a != nil && a.CommitsAhead > 0
 	hasAgent := a != nil
 
 	actions := []action{
@@ -524,8 +445,7 @@ func renderActionBar(a *core.AgentState, repoRoot string) string {
 		}
 	}
 
-	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
-	return bar
+	return lipgloss.JoinHorizontal(lipgloss.Center, parts...)
 }
 
 func renderMenu(title string, options []string, cursor int, hint string) string {
@@ -585,7 +505,7 @@ func (m TUIModel) View() string {
 		spinnerFrame := m.spinner.View()
 		var cards []string
 		for i, a := range m.agents {
-			cards = append(cards, RunAgentCard(a, m.repoRoot, srcBranch, spinnerFrame, i == m.cursor))
+			cards = append(cards, RunAgentCard(a, spinnerFrame, i == m.cursor))
 		}
 
 		cols := m.cols()
@@ -624,11 +544,11 @@ func (m TUIModel) View() string {
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	bar := renderActionBar(selected, m.repoRoot)
+	bar := renderActionBar(selected)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	contentHeight := lipgloss.Height(content)
-	barHeight := 2 // action bar + 1 line bottom padding
+	barHeight := 2
 	gap := m.height - contentHeight - barHeight
 	if gap > 0 {
 		content = content + strings.Repeat("\n", gap)
@@ -637,15 +557,8 @@ func (m TUIModel) View() string {
 	return outerPad.Render(content + "\n" + bar)
 }
 
-// RunInteractiveTUI runs the interactive TUI. actionHandler is called when the
-// user triggers an action. It returns an ActionResult: ActionDone for simple
-// status output, or MenuRequest to show an inline menu within the TUI.
-//
-// The actionHandler receives a TUIResult and an optional spawn name (non-empty
-// only for ActionSpawn).
-func RunInteractiveTUI(
-	repoRoot string,
-) {
+// RunInteractiveTUI runs the interactive TUI dashboard.
+func RunInteractiveTUI(repoRoot string) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
 			Frames: []string{"✶", "✸", "✹", "✺", "✹", "✷"},
@@ -674,189 +587,7 @@ func RunInteractiveTUI(
 	m.refreshAgents()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
-		core.Fatal("TUI error: %v", err)
-	}
-}
-
-func tuiActionHandler(repoRoot string) func(TUIResult, string) ActionResult {
-	return func(result TUIResult, spawnName string) ActionResult {
-		var sink bytes.Buffer
-		idx := result.AgentIdx
-
-		agentLabel := fmt.Sprintf("agent %d", idx)
-		if idx >= 0 {
-			if ag, err := core.ReadAgent(repoRoot, idx); err == nil && ag.Description != "" {
-				agentLabel = fmt.Sprintf("%q", ag.Description)
-			}
-		}
-
-		switch result.Action {
-		case ActionMerge:
-			if idx >= 0 {
-				err := ops.MergeOne(&sink, repoRoot, idx)
-				if conflictErr, ok := err.(*ops.MergeConflictErr); ok {
-					return MenuRequest{
-						Title: fmt.Sprintf("Conflict merging %s — how to resolve?", agentLabel),
-						Options: []string{
-							"Continue — leave conflicts, resolve manually",
-							"Abort — discard merge and reset",
-						},
-						Callback: func(choice int) ActionResult {
-							var sink2 bytes.Buffer
-							if choice == 1 || choice == -1 {
-								ops.ResolveConflict(&sink2, conflictErr, -1)
-								return ActionDone{
-									Lines: []string{"Merge aborted"},
-									Level: ToastWarning,
-								}
-							}
-							ops.ResolveConflict(&sink2, conflictErr, 0)
-							return ActionDone{
-								Lines: []string{"Conflicts left for manual resolution"},
-								Level: ToastWarning,
-							}
-						},
-					}
-				}
-				if err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Merge failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Merged %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionSpawn:
-			ops.SpawnByName(&sink, repoRoot, spawnName)
-			return ActionDone{
-				Lines: []string{fmt.Sprintf("Spawned %q", spawnName)},
-				Level: ToastSuccess,
-			}
-
-		case ActionAccept:
-			if idx >= 0 {
-				if err := ops.AcceptOne(&sink, repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Accept failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Accepted %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionReject:
-			if idx >= 0 {
-				if err := ops.RejectOne(&sink, repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Reject failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Rejected %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionCancel:
-			if idx >= 0 {
-				ag, err := core.ReadAgent(repoRoot, idx)
-				if err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Cancel failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-
-				srcBranch := core.SourceBranch(repoRoot)
-				ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+ag.Branch)
-				aheadNum := 0
-				fmt.Sscanf(ahead, "%d", &aheadNum)
-
-				dirty := false
-				if core.IsDir(ag.Worktree) {
-					status, _ := core.Git(ag.Worktree, "status", "--porcelain")
-					dirty = status != ""
-				}
-
-				if aheadNum > 0 || dirty {
-					var warnings []string
-					if aheadNum > 0 {
-						commitWord := "commit"
-						if aheadNum != 1 {
-							commitWord = "commits"
-						}
-						warnings = append(warnings, fmt.Sprintf("%d %s", aheadNum, commitWord))
-					}
-					if dirty {
-						warnings = append(warnings, "uncommitted changes")
-					}
-					detail := strings.Join(warnings, " and ")
-
-					return MenuRequest{
-						Title: fmt.Sprintf("Cancel %s? It has %s that will be lost.", agentLabel, detail),
-						Options: []string{
-							"Yes — discard and cancel",
-							"No — keep agent",
-						},
-						Callback: func(choice int) ActionResult {
-							if choice == 0 {
-								var sink2 bytes.Buffer
-								ops.CancelOne(&sink2, repoRoot, idx)
-								return ActionDone{
-									Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
-									Level: ToastSuccess,
-								}
-							}
-							return ActionDone{
-								Lines: []string{"Cancel aborted"},
-								Level: ToastInfo,
-							}
-						},
-					}
-				}
-
-				ops.CancelOne(&sink, repoRoot, idx)
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Cancelled %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionRebase:
-			if idx >= 0 {
-				if err := ops.SendRebase(repoRoot, idx); err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Rebase failed: %s", err)},
-						Level: ToastError,
-					}
-				}
-				return ActionDone{
-					Lines: []string{fmt.Sprintf("Sent rebase command to %s", agentLabel)},
-					Level: ToastSuccess,
-				}
-			}
-
-		case ActionFocus:
-			if idx >= 0 {
-				ag, err := core.ReadAgent(repoRoot, idx)
-				if err != nil {
-					return ActionDone{
-						Lines: []string{fmt.Sprintf("Failed to focus: %s", err)},
-						Level: ToastError,
-					}
-				}
-				core.TmuxRun("select-window", "-t", ag.Window)
-			}
-		}
-
-		return ActionDone{}
+		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		os.Exit(1)
 	}
 }

@@ -2,7 +2,6 @@ package ops
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/xemotrix/augmux/internal/core"
@@ -33,32 +32,49 @@ func teardownOne(repoRoot string, idx int) {
 }
 
 // CancelOne removes a single agent, discarding all its changes.
-func CancelOne(w io.Writer, repoRoot string, idx int) {
-	repoRoot = core.MustAbs(repoRoot)
+func CancelOne(repoRoot string, idx int) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
-		core.Fatal("Agent %d not found.", idx)
+		return fmt.Errorf("agent %d not found: %w", idx, err)
 	}
 
 	if ag.MergeCommit != "" {
-		currentHead := core.GitMust(repoRoot, "rev-parse", "HEAD")
+		currentHead, err := core.Git(repoRoot, "rev-parse", "HEAD")
+		if err != nil {
+			return fmt.Errorf("failed to get HEAD: %w", err)
+		}
 		if currentHead == ag.MergeCommit {
-			core.GitMust(repoRoot, "reset", "--hard", "HEAD~1")
+			if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD~1"); err != nil {
+				return fmt.Errorf("failed to reset merge commit: %w", err)
+			}
 		}
 	}
 
 	if ag.Resolving != "" {
-		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
+		if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD"); err != nil {
+			return fmt.Errorf("failed to reset during cancel: %w", err)
+		}
 	}
 
 	teardownOne(repoRoot, idx)
+	return nil
 }
 
-func TeardownAll(w io.Writer, repoRoot string) {
-	repoRoot = core.MustAbs(repoRoot)
+// TeardownAll removes all agents, worktrees, branches, and session state.
+func TeardownAll(repoRoot string) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	sd := core.StateDir(repoRoot)
 	if !core.IsDir(sd) {
-		core.Fatal("No augmux session found.")
+		return fmt.Errorf("no augmux session found")
 	}
 
 	for _, idx := range core.ListAgents(repoRoot) {
@@ -76,6 +92,7 @@ func TeardownAll(w io.Writer, repoRoot string) {
 	core.GitMust(repoRoot, "worktree", "prune")
 	os.Remove(core.WorktreeBase(repoRoot))
 	os.RemoveAll(sd)
+	return nil
 }
 
 func maybeCleanupSession(repoRoot string) {

@@ -1,14 +1,12 @@
 package ops
 
 import (
-	"io"
-
 	"github.com/xemotrix/augmux/internal/core"
 )
 
 // ResolveConflict handles a conflict resolution choice from the TUI.
 // choice: 0 = continue (manual), anything else = abort.
-func ResolveConflict(w io.Writer, info *MergeConflictErr, choice int) {
+func ResolveConflict(info *MergeConflictErr, choice int) {
 	td := core.TaskDir(info.RepoRoot, info.AgentIdx)
 
 	switch choice {

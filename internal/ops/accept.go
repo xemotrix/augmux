@@ -2,14 +2,17 @@ package ops
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/xemotrix/augmux/internal/core"
 )
 
-func AcceptOne(w io.Writer, repoRoot string, idx int) error {
-	repoRoot = core.MustAbs(repoRoot)
+func AcceptOne(repoRoot string, idx int) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	ag, err := core.ReadAgent(repoRoot, idx)
 	if err != nil {
 		return err
@@ -21,8 +24,12 @@ func AcceptOne(w io.Writer, repoRoot string, idx int) error {
 	return nil
 }
 
-func RejectOne(w io.Writer, repoRoot string, idx int) error {
-	repoRoot = core.MustAbs(repoRoot)
+func RejectOne(repoRoot string, idx int) error {
+	var err error
+	repoRoot, err = core.Abs(repoRoot)
+	if err != nil {
+		return err
+	}
 	td := core.TaskDir(repoRoot, idx)
 
 	ag, err := core.ReadAgent(repoRoot, idx)
@@ -32,7 +39,9 @@ func RejectOne(w io.Writer, repoRoot string, idx int) error {
 
 	// Case 1: conflicts are being resolved
 	if ag.Resolving != "" {
-		core.GitMust(repoRoot, "reset", "--hard", "HEAD")
+		if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD"); err != nil {
+			return fmt.Errorf("failed to reset during reject: %w", err)
+		}
 		os.Remove(td + "/resolving")
 		return nil
 	}
@@ -42,12 +51,17 @@ func RejectOne(w io.Writer, repoRoot string, idx int) error {
 		return fmt.Errorf("agent %d has not been merged yet. Nothing to reject", idx)
 	}
 
-	currentHead := core.GitMust(repoRoot, "rev-parse", "HEAD")
+	currentHead, err := core.Git(repoRoot, "rev-parse", "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
 	if currentHead != ag.MergeCommit {
-		return fmt.Errorf("cannot safely reset")
+		return fmt.Errorf("cannot safely reset: HEAD (%s) does not match merge commit (%s)", currentHead, ag.MergeCommit)
 	}
 
-	core.GitMust(repoRoot, "reset", "--hard", "HEAD~1")
+	if _, err := core.Git(repoRoot, "reset", "--hard", "HEAD~1"); err != nil {
+		return fmt.Errorf("failed to reset merge commit: %w", err)
+	}
 	os.Remove(td + "/merge_commit")
 	return nil
 }

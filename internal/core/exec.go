@@ -15,13 +15,22 @@ func Fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-// MustAbs returns the absolute path, or fatals.
+// MustAbs returns the absolute path, or fatals. Only use in main.go.
 func MustAbs(path string) string {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		Fatal("cannot resolve path: %s", path)
 	}
 	return abs
+}
+
+// Abs returns the absolute path or an error.
+func Abs(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve path %s: %w", path, err)
+	}
+	return abs, nil
 }
 
 // RunCmd runs a command and returns trimmed stdout.

@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/xemotrix/augmux/internal/components"
-	"github.com/xemotrix/augmux/internal/core"
 )
 
 // AgentDef describes how to invoke a particular agent CLI tool.
@@ -39,17 +36,21 @@ type agentConfig struct {
 }
 
 // configPath returns ~/.config/augmux/config.json.
-func configPath() string {
+func configPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		core.Fatal("cannot determine home directory: %v", err)
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", "augmux", "config.json")
+	return filepath.Join(home, ".config", "augmux", "config.json"), nil
 }
 
 // loadConfig reads the config file. Returns nil if it doesn't exist.
 func loadConfig() *agentConfig {
-	data, err := os.ReadFile(configPath())
+	p, err := configPath()
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(p)
 	if err != nil {
 		return nil
 	}
@@ -62,7 +63,10 @@ func loadConfig() *agentConfig {
 
 // saveConfig writes the config file.
 func saveConfig(cfg *agentConfig) error {
-	p := configPath()
+	p, err := configPath()
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
@@ -81,26 +85,6 @@ func findAgent(id string) *AgentDef {
 		}
 	}
 	return nil
-}
-
-// promptAgentSetup asks the user to pick an agent CLI and saves the config.
-func promptAgentSetup() *AgentDef {
-	var options []string
-	for _, a := range knownAgents {
-		options = append(options, a.DisplayName)
-	}
-
-	title := fmt.Sprintf("No agent CLI configured — select one:\n(config will be saved to %s)", configPath())
-	choice := components.RunSelectMenu(title, options)
-	if choice < 0 || choice >= len(knownAgents) {
-		core.Fatal("No agent selected.")
-	}
-
-	agent := &knownAgents[choice]
-	if err := saveConfig(&agentConfig{Agent: agent.ID}); err != nil {
-		core.Fatal("Failed to save config: %v", err)
-	}
-	return agent
 }
 
 // IsConfigured returns true if a valid agent config exists.
@@ -128,14 +112,14 @@ func ConfiguredAgent() *AgentDef {
 	return nil
 }
 
-// ActiveAgent returns the configured agent, prompting for setup if needed.
-func ActiveAgent() *AgentDef {
+// ActiveAgent returns the configured agent, or an error if none is configured.
+func ActiveAgent() (*AgentDef, error) {
 	cfg := loadConfig()
 	if cfg != nil {
 		if a := findAgent(cfg.Agent); a != nil {
-			return a
+			return a, nil
 		}
 	}
-	return promptAgentSetup()
+	return nil, fmt.Errorf("no agent CLI configured; select one from the TUI first")
 }
 

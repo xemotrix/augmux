@@ -11,19 +11,12 @@ import (
 
 func RunAgentCard(
 	a *core.AgentState,
-	repoRoot, srcBranch, spinnerFrame string,
+	spinnerFrame string,
 	selected ...bool,
 ) string {
 	sel := len(selected) > 0 && selected[0]
 
-	ahead := core.GitMust(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
-	if ahead == "" {
-		ahead = "?"
-	}
-	aheadNum := 0
-	fmt.Sscanf(ahead, "%d", &aheadNum)
-
-	borderColor := agentBorderColor(a, aheadNum)
+	borderColor := agentBorderColor(a)
 
 	var border lipgloss.Border
 	if sel {
@@ -71,9 +64,8 @@ func RunAgentCard(
 	nameLine := lipgloss.JoinHorizontal(lipgloss.Top, nameLeft, activityStr)
 
 	// Row 2: branch (left-aligned) + commits ahead / dirty count (right-aligned)
-	aheadStr := ahead + " ↑"
-	dirty := countUncommitted(a.Worktree)
-	dirtyStr := fmt.Sprintf("%d ✎", dirty)
+	aheadStr := fmt.Sprintf("%d ↑", a.CommitsAhead)
+	dirtyStr := fmt.Sprintf("%d ✎", a.UncommittedCount)
 	rightInfo := lipgloss.JoinHorizontal(lipgloss.Top,
 		styles.AheadStyle.MarginRight(2).Render(aheadStr),
 		styles.DirtyStyle.Render(dirtyStr),
@@ -104,7 +96,7 @@ func activityRawStr(a *core.AgentState) string {
 	return "○ idle"
 }
 
-func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalColor {
+func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
 		return styles.ColorCyan
 	}
@@ -117,7 +109,7 @@ func agentBorderColor(a *core.AgentState, commitsAhead int) lipgloss.TerminalCol
 	if a.Activity == core.ActivityWorking {
 		return styles.ColorYellow
 	}
-	if commitsAhead > 0 {
+	if a.CommitsAhead > 0 {
 		return styles.ColorGreen
 	}
 	return styles.ColorDimGray
@@ -150,19 +142,13 @@ func AgentStatusStyled(a *core.AgentState, text string) string {
 }
 
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	runes := []rune(s)
+	if len(runes) <= n {
 		return s
 	}
 	if n <= 3 {
-		return s[:n]
+		return string(runes[:n])
 	}
-	return s[:n-3] + "..."
+	return string(runes[:n-3]) + "..."
 }
 
-func countUncommitted(worktree string) int {
-	out := core.GitMust(worktree, "status", "--porcelain")
-	if out == "" {
-		return 0
-	}
-	return len(strings.Split(out, "\n"))
-}
