@@ -10,7 +10,7 @@ import (
 )
 
 func RunAgentCard(
-	a *core.AgentState,
+	a *core.Agent,
 	spinnerFrame string,
 	selected ...bool,
 ) string {
@@ -82,21 +82,21 @@ func RunAgentCard(
 	return lipgloss.JoinVertical(lipgloss.Left, topLine, bodyStyle.Render(body))
 }
 
-func activityIndicator(a *core.AgentState, spinnerFrame string) string {
+func activityIndicator(a *core.Agent, spinnerFrame string) string {
 	if a.Activity == core.ActivityWorking {
 		return lipgloss.NewStyle().Foreground(styles.ColorYellow).Render(spinnerFrame + " working")
 	}
 	return lipgloss.NewStyle().Foreground(styles.ColorDimGray).Render("○ idle")
 }
 
-func activityRawStr(a *core.AgentState) string {
+func activityRawStr(a *core.Agent) string {
 	if a.Activity == core.ActivityWorking {
 		return "⠋ working"
 	}
 	return "○ idle"
 }
 
-func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
+func agentBorderColor(a *core.Agent) lipgloss.TerminalColor {
 	if a.MergeCommit != "" {
 		return styles.ColorCyan
 	}
@@ -112,7 +112,7 @@ func agentBorderColor(a *core.AgentState) lipgloss.TerminalColor {
 	return styles.ColorDimGray
 }
 
-func AgentStatusRaw(a *core.AgentState) string {
+func AgentStatusRaw(a *core.Agent) string {
 	if a.MergeCommit != "" {
 		return "● merged"
 	}
@@ -122,7 +122,7 @@ func AgentStatusRaw(a *core.AgentState) string {
 	return "● wip"
 }
 
-func AgentStatusStyled(a *core.AgentState, text string) string {
+func AgentStatusStyled(a *core.Agent, text string) string {
 	if a.MergeCommit != "" {
 		return styles.BadgeMerged.Render(text)
 	}
@@ -142,4 +142,3 @@ func truncate(s string, n int) string {
 	}
 	return string(runes[:n-3]) + "..."
 }
-

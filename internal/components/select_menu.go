@@ -61,16 +61,16 @@ func (m selectMenuModel) View() string {
 	var items []string
 	for i, opt := range m.options {
 		cur := lipgloss.NewStyle().Width(2).Render("")
-		style := styles.PickerNormalStyle
+		style := styles.DefaultStyle
 		if i == m.cursor {
-			cur = styles.PickerCursorStyle.Render("▸ ")
-			style = styles.PickerSelectedStyle
+			cur = styles.AccentStyle.Render("▸ ")
+			style = styles.EnabledStyle
 		}
 		items = append(items, lipgloss.JoinHorizontal(lipgloss.Top, cur, style.Render(opt)))
 	}
 	optionsList := lipgloss.JoinVertical(lipgloss.Left, items...)
 
-	hint := styles.PickerHintStyle.Render("j/k navigate · enter select · esc cancel")
+	hint := styles.HintStyle.Render("j/k navigate · enter select · esc cancel")
 
 	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", optionsList, "", hint, "")
 }

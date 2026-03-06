@@ -38,8 +38,8 @@ var (
 	paneStatesMu sync.Mutex
 )
 
-// AgentState holds the state for a single agent.
-type AgentState struct {
+// Agent holds the state for a single agent.
+type Agent struct {
 	Index            int
 	Description      string
 	Branch           string
@@ -50,6 +50,36 @@ type AgentState struct {
 	HasConflicts     bool   // true if merging this branch would produce conflicts
 	CommitsAhead     int    // commits ahead of source branch
 	UncommittedCount int    // number of uncommitted files in worktree
+}
+
+type AgentStatus byte
+
+const (
+	AgentStatusNone AgentStatus = iota // for where there are no agents
+	AgentStatusWip
+	AgentStatusMerged
+	AgentStatusIdle
+	AgentStatusConflict
+)
+
+func (a *Agent) HasCommits() bool {
+	return a != nil && a.CommitsAhead > 0
+}
+
+func (a *Agent) Status() AgentStatus {
+	if a == nil {
+		return AgentStatusNone
+	}
+	if a.HasConflicts {
+		return AgentStatusConflict
+	}
+	if a.MergeCommit != "" {
+		return AgentStatusMerged
+	}
+	if a.Activity == ActivityIdle {
+		return AgentStatusIdle
+	}
+	return AgentStatusWip
 }
 
 // conflictCacheEntry stores a cached merge-tree result keyed on the resolved
@@ -148,7 +178,7 @@ func TaskDir(repoRoot string, idx int) string {
 }
 
 // ReadAgent reads the state for a single agent.
-func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
+func ReadAgent(repoRoot string, idx int) (*Agent, error) {
 	td := TaskDir(repoRoot, idx)
 	if !IsDir(td) {
 		return nil, fmt.Errorf("agent %d not found", idx)
@@ -158,7 +188,7 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 		window = fmt.Sprintf("augmux-%d", idx)
 	}
 	activity := detectActivity(window)
-	return &AgentState{
+	return &Agent{
 		Index:       idx,
 		Description: ReadFileContent(filepath.Join(td, "description")),
 		Branch:      ReadFileContent(filepath.Join(td, "branch")),
@@ -172,7 +202,7 @@ func ReadAgent(repoRoot string, idx int) (*AgentState, error) {
 // EnrichAgent populates derived fields (CommitsAhead, UncommittedCount,
 // HasConflicts) that require git operations. Call once per refresh cycle
 // rather than recomputing in every consumer.
-func EnrichAgent(repoRoot, srcBranch string, a *AgentState) {
+func EnrichAgent(repoRoot, srcBranch string, a *Agent) {
 	if a.Branch != "" && srcBranch != "" {
 		ahead, err := Git(repoRoot, "rev-list", "--count", srcBranch+".."+a.Branch)
 		if err == nil {
@@ -233,8 +263,8 @@ func detectActivity(window string) string {
 
 // ReadAndEnrichAgents reads and enriches all agents in parallel.
 // Each agent's ReadAgent + EnrichAgent runs in its own goroutine.
-func ReadAndEnrichAgents(repoRoot string, indices []int, srcBranch string) []*AgentState {
-	results := make([]*AgentState, len(indices))
+func ReadAndEnrichAgents(repoRoot string, indices []int, srcBranch string) []*Agent {
+	results := make([]*Agent, len(indices))
 	var wg sync.WaitGroup
 	for i, idx := range indices {
 		wg.Add(1)
@@ -250,7 +280,7 @@ func ReadAndEnrichAgents(repoRoot string, indices []int, srcBranch string) []*Ag
 	}
 	wg.Wait()
 
-	var out []*AgentState
+	var out []*Agent
 	for _, a := range results {
 		if a != nil {
 			out = append(out, a)

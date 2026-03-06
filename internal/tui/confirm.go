@@ -82,7 +82,7 @@ func (m confirmModel) View() string {
 		no,
 	)
 	buttonRow := lipgloss.PlaceHorizontal(60, lipgloss.Center, buttons)
-	hint := styles.PickerHintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel")
+	hint := styles.HintStyle.Render("h/l switch · y/n · enter confirm · q/esc cancel")
 
 	return lipgloss.JoinVertical(lipgloss.Left, warning, "", buttonRow, "", hint, "")
 }

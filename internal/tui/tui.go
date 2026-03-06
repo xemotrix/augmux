@@ -38,7 +38,7 @@ type TUIModel struct {
 	width         int
 	height        int
 	cursor        int // index into the agents slice
-	agents        []*core.AgentState
+	agents        []*core.Agent
 	quitting      bool
 	mode          tuiMode
 	spinner       spinner.Model
@@ -49,12 +49,15 @@ type TUIModel struct {
 	menuOptions   []string                             // inline menu options
 	menuCursor    int                                  // inline menu cursor
 	menuCallback  func(int) ActionResult               // inline menu callback
+	actionBar     ActionBar
 
 	conflictTree *conflictTreeState // non-nil when viewing conflict tree
 }
 
-type tickMsg time.Time
-type conflictTreeMsg struct{ state *conflictTreeState }
+type (
+	tickMsg         time.Time
+	conflictTreeMsg struct{ state *conflictTreeState }
+)
 
 func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -227,13 +230,9 @@ func (m TUIModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m TUIModel) updateAgentSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if m.menuCursor > 0 {
-			m.menuCursor--
-		}
+		m.menuCursor = max(0, m.menuCursor-1)
 	case "down", "j":
-		if m.menuCursor < len(m.menuOptions)-1 {
-			m.menuCursor++
-		}
+		m.menuCursor = min(len(m.menuOptions)-1, m.menuCursor+1)
 	case "enter":
 		defs := agent.KnownAgentDefs()
 		m.mode = modeNormal
@@ -252,18 +251,15 @@ func (m TUIModel) updateAgentSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	n := len(m.agents)
+	nAgents := len(m.agents)
 	cols := m.cols()
 
-	var sel *core.AgentState
-	if m.cursor >= 0 && m.cursor < n {
+	var sel *core.Agent
+	if m.cursor >= 0 && m.cursor < nAgents {
 		sel = m.agents[m.cursor]
 	}
-	isWip := sel != nil && sel.MergeCommit == ""
-	isMerged := sel != nil && sel.MergeCommit != ""
-	isIdle := sel != nil && sel.Activity == core.ActivityIdle
-	hasCommits := sel != nil && sel.CommitsAhead > 0
-	hasConflicts := sel != nil && sel.HasConflicts
+
+	selStatus := sel.Status()
 
 	agentIdx := -1
 	if sel != nil {
@@ -275,72 +271,68 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "h", "left":
-		if n > 0 {
-			rowStart := (m.cursor / cols) * cols
-			rowEnd := min(rowStart+cols-1, n-1)
-			if m.cursor == rowStart {
-				m.cursor = rowEnd
-			} else {
-				m.cursor--
-			}
+		if nAgents == 0 {
+			break
+		}
+		rowStart := (m.cursor / cols) * cols
+		rowEnd := min(rowStart+cols-1, nAgents-1)
+		if m.cursor == rowStart {
+			m.cursor = rowEnd
+		} else {
+			m.cursor--
 		}
 	case "l", "right":
-		if n > 0 {
-			rowStart := (m.cursor / cols) * cols
-			rowEnd := min(rowStart+cols-1, n-1)
-			if m.cursor == rowEnd {
-				m.cursor = rowStart
-			} else {
-				m.cursor++
-			}
+		if nAgents == 0 {
+			break
+		}
+		rowStart := (m.cursor / cols) * cols
+		rowEnd := min(rowStart+cols-1, nAgents-1)
+		if m.cursor == rowEnd {
+			m.cursor = rowStart
+		} else {
+			m.cursor++
 		}
 	case "k", "up":
-		if n > 0 {
-			if m.cursor-cols >= 0 {
-				m.cursor -= cols
-			} else {
-				col := m.cursor % cols
-				target := ((n - 1) / cols) * cols + col
-				if target >= n {
-					target -= cols
-				}
-				m.cursor = target
+		if nAgents == 0 {
+			break
+		}
+		if m.cursor-cols >= 0 {
+			m.cursor -= cols
+		} else {
+			col := m.cursor % cols
+			target := ((nAgents-1)/cols)*cols + col
+			if target >= nAgents {
+				target -= cols
 			}
+			m.cursor = target
 		}
 	case "j", "down":
-		if n > 0 {
-			if m.cursor+cols < n {
-				m.cursor += cols
-			} else {
-				m.cursor = m.cursor % cols
-			}
+		if nAgents == 0 {
+			break
+		}
+		if m.cursor+cols < nAgents {
+			m.cursor += cols
+		} else {
+			m.cursor = m.cursor % cols
 		}
 	case "s":
-		ti := textinput.New()
-		ti.Placeholder = "e.g. fix auth bug"
-		ti.Focus()
-		ti.CharLimit = 80
-		ti.Width = 50
-		ti.Validate = validateAgentName
-		ti.PromptStyle = styles.PickerCursorStyle
-		ti.TextStyle = styles.PickerSelectedStyle
-		m.textInput = ti
+		m.textInput = newSpawnTextInput()
 		m.mode = modeSpawning
 		return m, textinput.Blink
 	case "m":
-		if isWip && hasCommits && !hasConflicts {
+		if selStatus == core.AgentStatusWip && sel.HasCommits() {
 			return m.runInlineAction(ActionMerge, agentIdx)
 		}
 	case "a":
-		if isMerged {
+		if selStatus == core.AgentStatusMerged {
 			return m.runInlineAction(ActionAccept, agentIdx)
 		}
 	case "r":
-		if isMerged {
+		if selStatus == core.AgentStatusMerged {
 			return m.runInlineAction(ActionReject, agentIdx)
 		}
 	case "c":
-		if isWip {
+		if selStatus == core.AgentStatusWip {
 			return m.runInlineAction(ActionCancel, agentIdx)
 		}
 	case "=":
@@ -352,7 +344,7 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "b":
-		if isWip && sel.HasConflicts && isIdle {
+		if selStatus == core.AgentStatusConflict {
 			return m.runInlineAction(ActionRebase, agentIdx)
 		}
 	case "enter":
@@ -395,94 +387,16 @@ func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, te
 	}
 }
 
-// renderActionBar renders the bottom action bar with context-sensitive styling.
-func renderActionBar(a *core.AgentState, width int) string {
-	type action struct {
-		name    string
-		enabled bool
-	}
-
-	isWip := a != nil && a.MergeCommit == ""
-	isMerged := a != nil && a.MergeCommit != ""
-	isIdle := a != nil && a.Activity == core.ActivityIdle
-	hasConflicts := a != nil && a.HasConflicts
-	hasCommits := a != nil && a.CommitsAhead > 0
-	hasAgent := a != nil
-
-	actions := []action{
-		{"enter:focus", hasAgent},
-		{"spawn", true},
-		{"merge", isWip && hasCommits && !hasConflicts},
-		{"re|base", isWip && hasConflicts && isIdle},
-		{"=:details", hasCommits},
-		{"accept", isMerged},
-		{"reject", isMerged},
-		{"cancel", isWip},
-	}
-
-	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorAccent)
-	enabledStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWhite)
-	disabledStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
-	sepStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
-
-	sep := sepStyle.Render(" · ")
-
-	var blocks []string
-	for i, act := range actions {
-		var rendered string
-		if act.enabled {
-			if idx := strings.Index(act.name, ":"); idx >= 0 {
-				key := act.name[:idx]
-				label := act.name[idx+1:]
-				rendered = lipgloss.JoinHorizontal(lipgloss.Center,
-					accentStyle.Render(key),
-					enabledStyle.Render(" "+label),
-				)
-			} else if idx := strings.Index(act.name, "|"); idx >= 0 {
-				prefix := act.name[:idx]
-				rest := act.name[idx+1:]
-				rendered = lipgloss.JoinHorizontal(lipgloss.Center,
-					enabledStyle.Render(prefix),
-					accentStyle.Render(string(rest[0])),
-					enabledStyle.Render(rest[1:]),
-				)
-			} else {
-				rendered = lipgloss.JoinHorizontal(lipgloss.Center,
-					accentStyle.Render(string(act.name[0])),
-					enabledStyle.Render(act.name[1:]),
-				)
-			}
-		} else {
-			name := act.name
-			if idx := strings.Index(name, ":"); idx >= 0 {
-				name = name[:idx] + " " + name[idx+1:]
-			}
-			name = strings.ReplaceAll(name, "|", "")
-			rendered = disabledStyle.Render(name)
-		}
-		if i > 0 {
-			rendered = sep + rendered
-		}
-		blocks = append(blocks, rendered)
-	}
-
-	var rows []string
-	var currentRow []string
-	currentWidth := 0
-	for _, block := range blocks {
-		bw := lipgloss.Width(block)
-		if currentWidth+bw > width && len(currentRow) > 0 {
-			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, currentRow...))
-			currentRow = nil
-			currentWidth = 0
-		}
-		currentRow = append(currentRow, block)
-		currentWidth += bw
-	}
-	if len(currentRow) > 0 {
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, currentRow...))
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+func newSpawnTextInput() textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = "e.g. fix auth bug"
+	ti.Focus()
+	ti.CharLimit = 80
+	ti.Width = 50
+	ti.Validate = validateAgentName
+	ti.PromptStyle = styles.AccentStyle
+	ti.TextStyle = styles.EnabledStyle
+	return ti
 }
 
 func renderMenu(title string, options []string, cursor int, hint string) string {
@@ -491,16 +405,16 @@ func renderMenu(title string, options []string, cursor int, hint string) string 
 	var items []string
 	for i, opt := range options {
 		cur := lipgloss.NewStyle().Width(2).Render("")
-		style := styles.PickerNormalStyle
+		style := styles.DefaultStyle
 		if i == cursor {
-			cur = styles.PickerCursorStyle.Render("▸ ")
-			style = styles.PickerSelectedStyle
+			cur = styles.AccentStyle.Render("▸ ")
+			style = styles.EnabledStyle
 		}
 		items = append(items, lipgloss.JoinHorizontal(lipgloss.Top, cur, style.Render(opt)))
 	}
 	optionsList := lipgloss.JoinVertical(lipgloss.Left, items...)
 
-	hintLine := styles.PickerHintStyle.Render(hint)
+	hintLine := styles.HintStyle.Render(hint)
 
 	return lipgloss.JoinVertical(lipgloss.Left, titleLine, "", optionsList, "", hintLine, "")
 }
@@ -546,7 +460,7 @@ func (m TUIModel) View() string {
 	}
 
 	if len(m.agents) == 0 {
-		sections = append(sections, styles.LabelStyle.Render("No agents running."))
+		sections = append(sections, styles.HintStyle.Render("No agents running."))
 	} else {
 		spinnerFrame := m.spinner.View()
 		var cards []string
@@ -574,7 +488,7 @@ func (m TUIModel) View() string {
 	if m.mode == modeSpawning {
 		spawnTitle := styles.TitleStyle.Render("Task name for new agent:")
 		inputLine := lipgloss.NewStyle().Render(m.textInput.View())
-		hint := styles.PickerHintStyle.Render("enter confirm · esc cancel")
+		hint := styles.HintStyle.Render("enter confirm · esc cancel")
 		sections = append(sections, spawnTitle, "", inputLine, "", hint, "")
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
@@ -586,11 +500,11 @@ func (m TUIModel) View() string {
 		return outerPad.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
 	}
 
-	var selected *core.AgentState
+	var selected *core.Agent
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	bar := renderActionBar(selected, m.width-2)
+	bar := m.actionBar.View(selected.Status(), selected.HasCommits(), m.width-2)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	contentHeight := lipgloss.Height(content)
@@ -608,7 +522,7 @@ func RunInteractiveTUI(repoRoot string) {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.Spinner{
 			Frames: []string{"◐", "◓", "◑", "◒"},
-			FPS:    time.Second / 16,
+			FPS:    time.Second / 30,
 		}),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(styles.ColorYellow)),
 	)

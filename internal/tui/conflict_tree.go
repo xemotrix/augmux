@@ -34,7 +34,7 @@ type conflictTreeState struct {
 
 // computeConflictTree gathers file change data for the given agent and builds
 // the categorized file list. Must be called from a tea.Cmd (does git I/O).
-func computeConflictTree(repoRoot string, ag *core.AgentState) *conflictTreeState {
+func computeConflictTree(repoRoot string, ag *core.Agent) *conflictTreeState {
 	srcBranch := core.SourceBranch(repoRoot)
 
 	mergeBase := core.GitMust(repoRoot, "merge-base", srcBranch, ag.Branch)
@@ -199,7 +199,7 @@ func renderConflictTree(state *conflictTreeState) string {
 		presentCats[f.category] = true
 	}
 
-	legendEntries := []string{"", styles.LabelStyle.Render("Legend:")}
+	legendEntries := []string{"", styles.DefaultStyle.Render("Legend:")}
 	if presentCats[catConflict] {
 		legendEntries = append(legendEntries, lipgloss.NewStyle().Foreground(styles.ColorRed).Render("  ● conflict"))
 	}
@@ -209,7 +209,7 @@ func renderConflictTree(state *conflictTreeState) string {
 	if presentCats[catWorktreeOnly] {
 		legendEntries = append(legendEntries, lipgloss.NewStyle().Foreground(styles.ColorGreen).Render("  ● changed only in worktree"))
 	}
-	legendEntries = append(legendEntries, "", styles.PickerHintStyle.Render("j/k scroll · ctrl-u/ctrl-d half-page · esc close"))
+	legendEntries = append(legendEntries, "", styles.HintStyle.Render("j/k scroll · ctrl-u/ctrl-d half-page · esc close"))
 	legend := lipgloss.JoinVertical(lipgloss.Left, legendEntries...)
 
 	return rootTree.String() + "\n" + legend

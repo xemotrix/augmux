@@ -1,6 +1,8 @@
 package styles
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+)
 
 var (
 	// Kanagawa color palette
@@ -24,27 +26,25 @@ var (
 	BadgeWip       = lipgloss.NewStyle().Bold(true).Foreground(ColorGreen)
 	BadgeMerged    = lipgloss.NewStyle().Bold(true).Foreground(ColorCyan)
 	BadgeConflicts = lipgloss.NewStyle().Bold(true).Foreground(ColorRed)
+
 	// Labels and values
-	LabelStyle  = lipgloss.NewStyle().Foreground(ColorDimGray)
 	ValueStyle  = lipgloss.NewStyle().Foreground(ColorWhite)
 	BranchStyle = lipgloss.NewStyle().Foreground(ColorCyan)
 	AheadStyle  = lipgloss.NewStyle().Foreground(ColorYellow)
 	DirtyStyle  = lipgloss.NewStyle().Foreground(ColorRed)
 
-	// Picker
-	PickerCursorStyle   = lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
-	PickerSelectedStyle = lipgloss.NewStyle().Foreground(ColorWhite).Bold(true)
-	PickerNormalStyle   = lipgloss.NewStyle().Foreground(ColorGray)
-	PickerHintStyle     = lipgloss.NewStyle().Foreground(ColorDimGray).Italic(true)
+	// Text Styles
+	AccentStyle   = lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+	EnabledStyle  = lipgloss.NewStyle().Foreground(ColorWhite).Bold(true)
+	DisabledStyle = lipgloss.NewStyle().Foreground(ColorDimGray)
+	HintStyle     = lipgloss.NewStyle().Foreground(ColorDimGray).Italic(true)
+	DefaultStyle  = lipgloss.NewStyle().Foreground(ColorGray)
 
 	// Toast notifications
 	ToastInfo    = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
 	ToastSuccess = lipgloss.NewStyle().Foreground(ColorGreen).Bold(true)
 	ToastWarning = lipgloss.NewStyle().Foreground(ColorYellow).Bold(true)
 	ToastError   = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
-
-	// Separator
-	SeparatorStyle = lipgloss.NewStyle().Foreground(ColorDimGray)
 
 	// Header info
 	HeaderKeyStyle = lipgloss.NewStyle().Foreground(ColorGray).Bold(true)
