@@ -396,7 +396,7 @@ func (m TUIModel) runInlineAction(action TUIAction, agentIdx int) (tea.Model, te
 }
 
 // renderActionBar renders the bottom action bar with context-sensitive styling.
-func renderActionBar(a *core.AgentState) string {
+func renderActionBar(a *core.AgentState, width int) string {
 	type action struct {
 		name    string
 		enabled bool
@@ -426,32 +426,32 @@ func renderActionBar(a *core.AgentState) string {
 	disabledStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
 	sepStyle := lipgloss.NewStyle().Foreground(styles.ColorDimGray)
 
-	var parts []string
+	sep := sepStyle.Render(" · ")
+
+	var blocks []string
 	for i, act := range actions {
-		if i > 0 {
-			parts = append(parts, sepStyle.Render(" · "))
-		}
+		var rendered string
 		if act.enabled {
 			if idx := strings.Index(act.name, ":"); idx >= 0 {
 				key := act.name[:idx]
 				label := act.name[idx+1:]
-				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
+				rendered = lipgloss.JoinHorizontal(lipgloss.Center,
 					accentStyle.Render(key),
 					enabledStyle.Render(" "+label),
-				))
+				)
 			} else if idx := strings.Index(act.name, "|"); idx >= 0 {
 				prefix := act.name[:idx]
 				rest := act.name[idx+1:]
-				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
+				rendered = lipgloss.JoinHorizontal(lipgloss.Center,
 					enabledStyle.Render(prefix),
 					accentStyle.Render(string(rest[0])),
 					enabledStyle.Render(rest[1:]),
-				))
+				)
 			} else {
-				parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Center,
+				rendered = lipgloss.JoinHorizontal(lipgloss.Center,
 					accentStyle.Render(string(act.name[0])),
 					enabledStyle.Render(act.name[1:]),
-				))
+				)
 			}
 		} else {
 			name := act.name
@@ -459,11 +459,31 @@ func renderActionBar(a *core.AgentState) string {
 				name = name[:idx] + " " + name[idx+1:]
 			}
 			name = strings.ReplaceAll(name, "|", "")
-			parts = append(parts, disabledStyle.Render(name))
+			rendered = disabledStyle.Render(name)
 		}
+		if i > 0 {
+			rendered = sep + rendered
+		}
+		blocks = append(blocks, rendered)
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+	var rows []string
+	var currentRow []string
+	currentWidth := 0
+	for _, block := range blocks {
+		bw := lipgloss.Width(block)
+		if currentWidth+bw > width && len(currentRow) > 0 {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, currentRow...))
+			currentRow = nil
+			currentWidth = 0
+		}
+		currentRow = append(currentRow, block)
+		currentWidth += bw
+	}
+	if len(currentRow) > 0 {
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, currentRow...))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
 func renderMenu(title string, options []string, cursor int, hint string) string {
@@ -501,13 +521,22 @@ func (m TUIModel) View() string {
 
 	title := styles.TitleStyle.Render("\uebc8 augmux session")
 
-	header := lipgloss.JoinHorizontal(lipgloss.Center,
+	repoLine := lipgloss.JoinHorizontal(lipgloss.Center,
 		styles.HeaderKeyStyle.Render("Repo:"),
-		styles.HeaderValStyle.Render(" "+m.repoRoot+"   "),
+		styles.HeaderValStyle.Render(" "+m.repoRoot),
+	)
+	branchLine := lipgloss.JoinHorizontal(lipgloss.Center,
 		styles.HeaderKeyStyle.Render("Source:"),
 		lipgloss.NewStyle().Render(" "),
 		styles.RenderBranch(srcBranch),
 	)
+	horizontalHeader := repoLine + "   " + branchLine
+	var header string
+	if lipgloss.Width(horizontalHeader) <= m.width-2 {
+		header = horizontalHeader
+	} else {
+		header = lipgloss.JoinVertical(lipgloss.Left, repoLine, branchLine)
+	}
 	sections := []string{title, header, ""}
 
 	if m.mode == modeAgentSetup {
@@ -562,11 +591,11 @@ func (m TUIModel) View() string {
 	if m.cursor >= 0 && m.cursor < len(m.agents) {
 		selected = m.agents[m.cursor]
 	}
-	bar := renderActionBar(selected)
+	bar := renderActionBar(selected, m.width-2)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	contentHeight := lipgloss.Height(content)
-	barHeight := 2
+	barHeight := lipgloss.Height(bar) + 1
 	gap := m.height - contentHeight - barHeight
 	if gap > 0 {
 		content = content + strings.Repeat("\n", gap)
