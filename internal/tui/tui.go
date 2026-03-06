@@ -275,20 +275,45 @@ func (m TUIModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "h", "left":
-		if m.cursor > 0 {
-			m.cursor--
+		if n > 0 {
+			rowStart := (m.cursor / cols) * cols
+			rowEnd := min(rowStart+cols-1, n-1)
+			if m.cursor == rowStart {
+				m.cursor = rowEnd
+			} else {
+				m.cursor--
+			}
 		}
 	case "l", "right":
-		if m.cursor < n-1 {
-			m.cursor++
+		if n > 0 {
+			rowStart := (m.cursor / cols) * cols
+			rowEnd := min(rowStart+cols-1, n-1)
+			if m.cursor == rowEnd {
+				m.cursor = rowStart
+			} else {
+				m.cursor++
+			}
 		}
 	case "k", "up":
-		if m.cursor-cols >= 0 {
-			m.cursor -= cols
+		if n > 0 {
+			if m.cursor-cols >= 0 {
+				m.cursor -= cols
+			} else {
+				col := m.cursor % cols
+				target := ((n - 1) / cols) * cols + col
+				if target >= n {
+					target -= cols
+				}
+				m.cursor = target
+			}
 		}
 	case "j", "down":
-		if m.cursor+cols < n {
-			m.cursor += cols
+		if n > 0 {
+			if m.cursor+cols < n {
+				m.cursor += cols
+			} else {
+				m.cursor = m.cursor % cols
+			}
 		}
 	case "s":
 		ti := textinput.New()
