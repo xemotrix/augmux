@@ -39,7 +39,7 @@ var (
 	AccentStyle   = lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
 	EnabledStyle  = lipgloss.NewStyle().Foreground(ColorWhite).Bold(true)
 	DisabledStyle = lipgloss.NewStyle().Foreground(ColorDimGray)
-	HintStyle     = lipgloss.NewStyle().Foreground(ColorDimGray).Reverse(true)
+	HintStyle     = lipgloss.NewStyle().Foreground(ColorDimGray).Italic(true)
 	DefaultStyle  = lipgloss.NewStyle().Foreground(ColorGray)
 
 	// Confirm Styles
