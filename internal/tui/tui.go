@@ -26,10 +26,10 @@ const (
 type tuiMode int
 
 const (
-	modeNormal       tuiMode = iota
-	modeSpawning             // text input for spawn task name
-	modeMenu                 // inline menu selection
-	modeAgentSetup           // agent CLI picker shown on startup
+	modeNormal     tuiMode = iota
+	modeSpawning           // text input for spawn task name
+	modeMenu               // inline menu selection
+	modeAgentSetup         // agent CLI picker shown on startup
 )
 
 type TUIModel struct {
